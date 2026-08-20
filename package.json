@@ -1,6 +1,6 @@
 {
   "name": "bloub",
-  "private": true,
+  "private": false,
   "version": "0.1.1",
   "type": "module",
   "description": "SVG recreation of the x.ai bot avatar. One shape morphing through 14 states, measured off the reference video frame by frame.",
@@ -14,30 +14,48 @@
     "svg",
     "animation",
     "avatar",
-    "vue",
+    "solid-js",
     "morphing"
   ],
-  "packageManager": "pnpm@11.17.0",
+  "packageManager": "bun@1.4.0",
+  "files": [
+    "dist/package"
+  ],
+  "types": "./dist/package/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/package/types/index.d.ts",
+      "browser": "./dist/package/index.js",
+      "import": "./dist/package/server.js",
+      "default": "./dist/package/server.js"
+    }
+  },
+  "sideEffects": false,
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "build": "bun run typecheck && bun run build:app && bun run build:package",
+    "build:app": "vite build",
+    "build:package": "vite build --config vite.lib.config.ts && vite build --config vite.lib.ssr.config.ts && tsc -p tsconfig.lib.json",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:package": "bun run build:package && tsc -p tsconfig.package-test.json && bun -e \"import { BotEngine } from 'bloub'; console.log(new BotEngine().sample(0).bodyPath.length)\"",
+    "pack:check": "bun run test:package && bun pm pack --dry-run"
   },
-  "dependencies": {
-    "mediabunny": "^1.54.0",
-    "vue": "^3.5.41"
+  "peerDependencies": {
+    "solid-js": "^1.9.15"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.0.0",
-    "@vitejs/plugin-vue": "^6.0.8",
     "happy-dom": "^20.11.2",
+    "mediabunny": "^1.54.0",
+    "solid-js": "^1.9.15",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.2.1",
-    "vitest": "^4.1.10",
-    "vue-tsc": "^3.3.9"
+    "vite-plugin-solid": "^2.11.14",
+    "vitest": "^4.1.10"
   }
 }

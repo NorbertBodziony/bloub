@@ -1,5 +1,7 @@
-import { createApp } from 'vue'
-import App from './App.vue'
+import { render } from 'solid-js/web'
+import App from './App'
 import './styles.css'
 
-createApp(App).mount('#app')
+const root = document.getElementById('app')
+if (!root) throw new Error('element #app introuvable')
+render(() => App(), root)

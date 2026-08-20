@@ -12,6 +12,8 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "types": ["vite/client"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
@@ -22,5 +24,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vite.lib.config.ts", "vite.lib.ssr.config.ts"]
 }

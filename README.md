@@ -9,19 +9,20 @@ a plain background. No animation library.
 ## Running it
 
 ```bash
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 Then open http://localhost:5190.
 
 ```bash
-pnpm test     # vitest
-pnpm build    # vue-tsc --noEmit && vite build
+bun run test     # Vitest
+bun run build    # strict type check, demo build, and package build
 ```
 
-Vue 3, Vite, TypeScript, Tailwind 4. No ESLint and no Prettier: `vue-tsc` is the
-only gate, so run `pnpm build` before you call something done.
+SolidJS, Vite, TypeScript, Tailwind 4, and Bun. No ESLint and no Prettier:
+strict TypeScript is the source gate, so run `bun run build` before you call
+something done.
 
 ## What's in it
 
@@ -80,21 +81,36 @@ the DOM-less test suite possible.
 | [docs/export.md](docs/export.md) | Exporting to SVG, PNG, GIF and MP4 |
 | [docs/i18n.md](docs/i18n.md) | The hand-rolled translation layer |
 
-## Using the component
+## Using the package
 
-```vue
-<BloubBot v-model:block="block" v-model:state="state" v-model:playing="playing" />
-<BloubBot state="orbit" :size="120" :frozen-at="1.2" />
+```bash
+bun add bloub solid-js
 ```
 
-`block` is the playback cursor: a montage can play the same state twice, so the
-index is what identifies where you are; `state` follows it as an output. Pass
-`frozenAt` and the component renders one exact frame with no animation loop, which
-is how the thumbnails and the state board are drawn.
+```tsx
+import { createSignal } from 'solid-js'
+import { BloubBot, defaultCycle, type BloubBotRef } from 'bloub'
+
+const [playing, setPlaying] = createSignal(false)
+let bot: BloubBotRef | undefined
+
+<BloubBot
+  ref={(value) => (bot = value)}
+  cycle={defaultCycle().blocks}
+  playing={playing()}
+  onPlayingChange={setPlaying}
+/>
+```
+
+`block` is the playback cursor. A montage can play the same state twice, so the
+index identifies the current item. `state` follows it as an output. Pass
+`frozenAt` to render one exact frame with no animation loop. The component also
+exports a ref with `svg`, `seek(index, offset?)`, and `renderAt(seconds)`.
 
 Props: `size`, `shape`, `color`, `expression`, `paper`, `frozenAt`, `cycle`,
-`follow`, `gaze`. Models: `block`, `state`, `playing`, `elapsed`. See
-[BloubBot.vue](src/components/BloubBot.vue) for the details.
+`follow`, `gaze`, `ariaLabel`, `block`, `state`, `playing`, and `elapsed`. Each
+playback value has a matching `on...Change` callback. See
+[BloubBot.tsx](src/components/BloubBot.tsx) for the details.
 
 ## Changes
 
