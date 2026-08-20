@@ -1,4 +1,11 @@
-import { computed, ref, watchEffect } from 'vue'
+import {
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  type Accessor,
+  type Setter
+} from 'solid-js'
 import { ecris, lis } from '@/ui/stockage'
 import { formePlurielle, interpoler } from './format'
 import { choisirLangue, estLangue, type Langue, tagDe } from './langues'
@@ -25,9 +32,27 @@ type Chemins<T, P extends string = ''> = {
 
 export type Cle = Chemins<typeof fr>
 
-const courante = ref<Langue>(
-  choisirLangue(lis('langue'), navigator.languages ?? [navigator.language])
-)
+const languesNavigateur =
+  typeof navigator === 'undefined' ? ['fr'] : (navigator.languages ?? [navigator.language])
+let courante!: Accessor<Langue>
+let setCourante!: Setter<Langue>
+let dictionnaire!: Accessor<typeof fr>
+let tag!: Accessor<string>
+
+// Singleton reactif de l'application. La racine vit aussi longtemps que le module.
+createRoot(() => {
+  ;[courante, setCourante] = createSignal<Langue>(
+    choisirLangue(lis('langue'), languesNavigateur)
+  )
+  dictionnaire = createMemo(() => dictionnaires[courante()])
+  tag = createMemo(() => tagDe(courante()))
+
+  createEffect(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.lang = tag()
+    document.title = t('app.title')
+  })
+})
 
 /**
  * Langue courante, en lecture et en ecriture (`v-model` compris).
@@ -37,38 +62,22 @@ const courante = ref<Langue>(
  * l'anglais pour toujours, alors que la detection doit rester une hypothese
  * qu'on refait a chaque visite tant que l'utilisateur n'a pas tranche.
  */
-export const langue = computed<Langue>({
-  get: () => courante.value,
-  set: (valeur) => {
-    if (!estLangue(valeur)) return
-    courante.value = valeur
-    ecris('langue', valeur)
-  }
-})
+export const langue = courante
 
-const dictionnaire = computed(() => dictionnaires[courante.value])
-
-/** Etiquette BCP 47 de la langue courante, pour `Intl` et l'attribut `lang`. */
-const tag = computed(() => tagDe(courante.value))
-
-/**
- * L'attribut `lang` du document suit la langue : c'est lui qui fait choisir la
- * bonne voix au lecteur d'ecran et les bonnes regles de cesure. Le titre de
- * l'onglet suit aussi — `index.html` ne peut en porter qu'un, statique.
- */
-watchEffect(() => {
-  document.documentElement.lang = tag.value
-  document.title = t('app.title')
-})
+export function setLangue(valeur: Langue) {
+  if (!estLangue(valeur)) return
+  setCourante(valeur)
+  ecris('langue', valeur)
+}
 
 /** Les formateurs sont chers a construire et relus a chaque image de la piste. */
 const formateurs = new Map<string, Intl.NumberFormat>()
 
 function formateur(cle: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
-  const memo = `${tag.value}:${cle}`
+  const memo = `${tag()}:${cle}`
   let f = formateurs.get(memo)
   if (!f) {
-    f = new Intl.NumberFormat(tag.value, options)
+    f = new Intl.NumberFormat(tag(), options)
     formateurs.set(memo, f)
   }
   return f
@@ -99,7 +108,7 @@ export function pourcentage(fraction: number): string {
 function brut(cle: Cle): string {
   const noeud = cle
     .split('.')
-    .reduce<unknown>((n, k) => (n as Record<string, unknown>)[k], dictionnaire.value)
+    .reduce<unknown>((n, k) => (n as Record<string, unknown>)[k], dictionnaire())
   return noeud as string
 }
 
@@ -110,7 +119,7 @@ export function t(cle: Cle, valeurs?: Record<string, string | number>): string {
 
 /** Pluriel : `n` est toujours disponible comme `{n}` dans le gabarit. */
 export function pluriel(cle: Cle, n: number, valeurs?: Record<string, string | number>): string {
-  return interpoler(formePlurielle(brut(cle), n, tag.value), { n, ...valeurs })
+  return interpoler(formePlurielle(brut(cle), n, tag()), { n, ...valeurs })
 }
 
 /**

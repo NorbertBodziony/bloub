@@ -1,0 +1,436 @@
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  mergeProps,
+  on,
+  onCleanup,
+  onMount,
+  type JSX
+} from 'solid-js'
+import { Dynamic } from 'solid-js/web'
+import { NOTIF_BLUE } from '../bot/decor'
+import { BotEngine, type BotFrame } from '../bot/engine'
+import { clamp, easings } from '../bot/math'
+import { lookTarget, TURN_TIME, type GazeScript } from '../ui/gaze'
+import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '../bot/expressions'
+import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '../bot/skins'
+import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles'
+import { DEMI_VIEWBOX, RAYON } from '../bot/repere'
+import { STATE_BY_ID, type StateId } from '../bot/states'
+
+export interface BloubBotRef {
+  readonly svg: SVGSVGElement
+  seek(index: number, offset?: number): void
+  renderAt(seconds: number): void
+}
+
+export interface BloubBotProps {
+  size?: number
+  shape?: string
+  color?: string
+  expression?: string
+  paper?: string
+  ariaLabel?: string
+  frozenAt?: number
+  cycle?: Block[]
+  follow?: boolean
+  gaze?: GazeScript | null
+  block?: number
+  state?: StateId
+  playing?: boolean
+  elapsed?: number
+  onBlockChange?: (value: number) => void
+  onStateChange?: (value: StateId) => void
+  onPlayingChange?: (value: boolean) => void
+  onElapsedChange?: (value: number) => void
+  ref?: (value: BloubBotRef) => void
+  class?: string
+  style?: JSX.CSSProperties | string
+}
+
+export default function BloubBot(rawProps: BloubBotProps) {
+  const props = mergeProps(
+    {
+      size: 320,
+      shape: DEFAULT_SHAPE,
+      color: DEFAULT_COLOR,
+      expression: DEFAULT_EXPRESSION,
+      paper: '#f9f9f9',
+      cycle: defaultCycle().blocks,
+      follow: false,
+      gaze: null,
+      ariaLabel: 'Animated Bloub avatar'
+    },
+    rawProps
+  )
+
+  const [internalBlock, setInternalBlock] = createSignal(0)
+  const [internalState, setInternalState] = createSignal<StateId>('idle')
+  const [internalPlaying] = createSignal(false)
+  const [internalElapsed, setInternalElapsed] = createSignal(0)
+
+  const block = () => rawProps.block ?? internalBlock()
+  const state = () => rawProps.state ?? internalState()
+  const playing = () => rawProps.playing ?? internalPlaying()
+  const elapsed = () => rawProps.elapsed ?? internalElapsed()
+
+  function setBlock(value: number) {
+    if (rawProps.block === undefined) setInternalBlock(value)
+    rawProps.onBlockChange?.(value)
+  }
+
+  function setState(value: StateId) {
+    if (rawProps.state === undefined) setInternalState(value)
+    rawProps.onStateChange?.(value)
+  }
+
+  function setElapsed(value: number) {
+    if (rawProps.elapsed === undefined) setInternalElapsed(value)
+    rawProps.onElapsedChange?.(value)
+  }
+
+  const shapeRadii = createMemo(() => SHAPE_BY_ID.get(props.shape)?.radii ?? null)
+  const ink = createMemo(() => COLOR_BY_ID.get(props.color)?.hex ?? '#0a0a0c')
+  const expression = createMemo(() => EXPRESSION_BY_ID.get(props.expression) ?? null)
+
+  const engine = new BotEngine(RAYON, state(), shapeRadii(), expression())
+  const [frame, setFrame] = createSignal<BotFrame>(engine.sample(props.frozenAt ?? 0), {
+    equals: false
+  })
+  const uid = createUniqueId()
+  const maskId = `bot-mask-${uid}`
+
+  let svg!: SVGSVGElement
+  let raf = 0
+  let nextAt = Infinity
+  let last = 0
+  let clock = 0
+  let blockStart = 0
+  let pendingOffset = 0
+  let lastRenderedBlock = -1
+
+  function apply(index: number, from = 0) {
+    const current = props.cycle[index]
+    if (!current) {
+      nextAt = Infinity
+      return
+    }
+    blockStart = clock - from
+    setElapsed(from)
+    setState(current.state)
+    engine.setState(current.state, clock)
+    nextAt = playing() ? blockStart + current.duration : Infinity
+  }
+
+  function goToBlock(index: number) {
+    setBlock(index)
+    apply(index)
+  }
+
+  function seek(index: number, offset = 0) {
+    if (block() === index) {
+      apply(index, offset)
+      return
+    }
+    pendingOffset = offset
+    setBlock(index)
+  }
+
+  function renderAt(seconds: number) {
+    const blocks = props.cycle
+    if (!blocks.length) return
+    const { index } = blockAt(blocks, seconds)
+    if (index !== lastRenderedBlock) {
+      const current = blocks[index]!
+      setState(current.state)
+      if (index < lastRenderedBlock) engine.reset(current.state, offsetOf(blocks, index))
+      else engine.setState(current.state, offsetOf(blocks, index))
+      lastRenderedBlock = index
+    }
+    setFrame(engine.sample(seconds))
+  }
+
+  let pointer: { x: number; y: number } | null = null
+  let aiming = false
+  let turnSince = 0
+  let gazeSince = 0
+  let scripted = false
+  const SCRIPT_MORPH = 1 / 60
+
+  function onPointerMove(event: PointerEvent) {
+    if (event.pointerType === 'touch') return
+    pointer = { x: event.clientX, y: event.clientY }
+  }
+
+  function onPointerLeave() {
+    pointer = null
+  }
+
+  function release() {
+    if (!aiming) return
+    engine.setLook(null, clock, TURN_TIME)
+    aiming = false
+  }
+
+  function aim() {
+    if (!STATE_BY_ID.get(state())?.baseFace) {
+      release()
+      return
+    }
+    const box = svg?.getBoundingClientRect()
+    if (!box || box.width === 0 || box.height === 0) return
+    if (!aiming) turnSince = clock
+    const halfWidth = Math.max(1, window.innerWidth / 2)
+    const halfHeight = Math.max(1, window.innerHeight / 2)
+    engine.setLook(
+      lookTarget({
+        nx: pointer ? clamp((pointer.x - (box.left + box.width / 2)) / halfWidth, -1, 1) : 0,
+        ny: pointer ? clamp((pointer.y - (box.top + box.height / 2)) / halfHeight, -1, 1) : 0,
+        tour: easings.easeOutQuint(clamp((clock - turnSince) / TURN_TIME)),
+        pointer: pointer !== null
+      }),
+      clock
+    )
+    aiming = true
+  }
+
+  function scriptedGaze(run: GazeScript) {
+    engine.setLook(run(clock - gazeSince), clock, SCRIPT_MORPH)
+  }
+
+  function detach() {
+    window.removeEventListener('pointermove', onPointerMove)
+    document.removeEventListener('pointerleave', onPointerLeave)
+  }
+
+  function tick(ms: number) {
+    raf = requestAnimationFrame(tick)
+    const dt = last ? Math.min((ms - last) / 1000, 0.064) : 0
+    last = ms
+    clock += dt
+
+    if (playing()) {
+      if (clock >= nextAt && props.cycle.length) goToBlock((block() + 1) % props.cycle.length)
+      else setElapsed(clock - blockStart)
+    }
+
+    if (props.follow) aim()
+    else if (props.gaze) scriptedGaze(props.gaze)
+    setFrame(engine.sample(clock))
+  }
+
+  function redrawFrozen() {
+    if (props.frozenAt === undefined) return
+    setFrame(engine.sample(props.frozenAt))
+  }
+
+  createEffect(
+    on(
+      () => props.gaze,
+      (run) => {
+        if (run) {
+          gazeSince = clock
+          scripted = true
+          engine.setLook(run(0), clock - SCRIPT_MORPH, SCRIPT_MORPH)
+        } else if (scripted) {
+          engine.setLook(null, clock)
+          scripted = false
+        }
+      }
+    )
+  )
+
+  createEffect(
+    on(block, (index) => {
+      apply(index, pendingOffset)
+      pendingOffset = 0
+    }, { defer: true })
+  )
+
+  createEffect(
+    on(state, (id) => {
+      if (engine.state === id) return
+      engine.setState(id, clock)
+      redrawFrozen()
+    }, { defer: true })
+  )
+
+  createEffect(
+    on(playing, (on) => {
+      if (on) apply(block(), elapsed())
+      else nextAt = Infinity
+    }, { defer: true })
+  )
+
+  createEffect(
+    on(
+      () => props.cycle,
+      (blocks) => {
+        if (!blocks.length) {
+          nextAt = Infinity
+          return
+        }
+        const index = Math.min(block(), blocks.length - 1)
+        if (index !== block()) goToBlock(index)
+        else nextAt = playing() ? blockStart + blocks[index]!.duration : Infinity
+      },
+      { defer: true }
+    )
+  )
+
+  createEffect(on(shapeRadii, (radii) => {
+    engine.setShape(radii, clock)
+    redrawFrozen()
+  }, { defer: true }))
+
+  createEffect(on(expression, (value) => {
+    engine.setExpression(value, clock)
+    redrawFrozen()
+  }, { defer: true }))
+
+  createEffect(on(() => props.frozenAt, redrawFrozen, { defer: true }))
+
+  createEffect(() => {
+    const on = props.follow && props.frozenAt === undefined
+    if (on) {
+      window.addEventListener('pointermove', onPointerMove)
+      document.addEventListener('pointerleave', onPointerLeave)
+    } else {
+      detach()
+      release()
+    }
+  })
+
+  onMount(() => {
+    rawProps.ref?.({ get svg() { return svg }, seek, renderAt })
+    if (props.frozenAt !== undefined) return
+    apply(block(), elapsed())
+    raf = requestAnimationFrame(tick)
+  })
+
+  onCleanup(() => {
+    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf)
+    if (typeof window !== 'undefined') detach()
+  })
+
+  function dotAttrs(dot: BotFrame['dots'][number]) {
+    const fill =
+      dot.color ?? (dot.depth === undefined ? ink() : mixHex(props.paper, ink(), dot.depth))
+    const common = { fill, opacity: dot.opacity }
+    return dot.d
+      ? {
+          ...common,
+          d: dot.d,
+          transform: `translate(${dot.x} ${dot.y}) rotate(${dot.rot ?? 0}) scale(${RAYON})`
+        }
+      : { ...common, cx: dot.x, cy: dot.y, r: dot.r }
+  }
+
+  const Dots = () => (
+    <For each={frame().dots}>
+      {(dot) => <Dynamic component={dot.d ? 'path' : 'circle'} {...dotAttrs(dot)} />}
+    </For>
+  )
+
+  return (
+    <svg
+      ref={svg}
+      width={props.size}
+      height={props.size}
+      viewBox={`${-DEMI_VIEWBOX} ${-DEMI_VIEWBOX} ${DEMI_VIEWBOX * 2} ${DEMI_VIEWBOX * 2}`}
+      role="img"
+      aria-label={props.ariaLabel}
+      class={props.class}
+      style={props.style}
+    >
+      <defs>
+        <mask
+          id={maskId}
+          maskUnits="userSpaceOnUse"
+          x={-DEMI_VIEWBOX}
+          y={-DEMI_VIEWBOX}
+          width={DEMI_VIEWBOX * 2}
+          height={DEMI_VIEWBOX * 2}
+        >
+          <path d={frame().bodyPath} fill="#fff" />
+          <For each={frame().eyes}>
+            {(eye) => <path d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill="#000" />}
+          </For>
+          <Show when={frame().notch}>
+            {(notch) => <circle cx={notch().x} cy={notch().y} r={notch().r} fill="#000" />}
+          </Show>
+        </mask>
+
+        <For each={frame().arcs}>
+          {(arc) => (
+            <linearGradient
+              id={`${uid}-${arc.id}`}
+              gradientUnits="userSpaceOnUse"
+              x1={arc.grad.x1}
+              y1={arc.grad.y1}
+              x2={arc.grad.x2}
+              y2={arc.grad.y2}
+            >
+              <For each={arc.grad.stops}>
+                {(color, index) => (
+                  <stop offset={index() / (arc.grad.stops.length - 1)} stop-color={color} />
+                )}
+              </For>
+            </linearGradient>
+          )}
+        </For>
+      </defs>
+
+      <g fill="none" stroke-linecap="round">
+        <For each={frame().arcs}>
+          {(arc) => (
+            <path
+              d={arc.back}
+              stroke={`url(#${uid}-${arc.id})`}
+              stroke-width={arc.width}
+              opacity={arc.opacity}
+            />
+          )}
+        </For>
+      </g>
+
+      <Show when={frame().dotsBehind}><g><Dots /></g></Show>
+
+      <g opacity={frame().bodyAlpha}>
+        <path d={frame().bodyPath} fill={props.paper} />
+        <g mask={`url(#${maskId})`}>
+          <rect
+            x={-DEMI_VIEWBOX}
+            y={-DEMI_VIEWBOX}
+            width={DEMI_VIEWBOX * 2}
+            height={DEMI_VIEWBOX * 2}
+            fill={ink()}
+          />
+        </g>
+      </g>
+
+      <Show when={!frame().dotsBehind}><g><Dots /></g></Show>
+
+      <Show when={frame().notif}>
+        {(notif) => <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />}
+      </Show>
+
+      <g fill="none" stroke-linecap="round">
+        <For each={frame().arcs}>
+          {(arc) => (
+            <path
+              d={arc.front}
+              stroke={`url(#${uid}-${arc.id})`}
+              stroke-width={arc.width}
+              opacity={arc.opacity}
+            />
+          )}
+        </For>
+      </g>
+    </svg>
+  )
+}

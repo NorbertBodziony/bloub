@@ -10,8 +10,9 @@
  * forme porte son `fill` en hex.
  */
 
-import { createApp, h, nextTick, ref } from 'vue'
-import BloubBot from '@/components/BloubBot.vue'
+import { createComponent, createSignal } from 'solid-js'
+import { render } from 'solid-js/web'
+import BloubBot, { type BloubBotRef } from '@/components/BloubBot'
 import type { Block } from '@/bot/cycles'
 import { gifAnime, gifIndexe, indexe, nouvellePalette, recense, svgAnime } from './anime'
 import { arrete, DEMI_ECRAN, sansCommentaires, viewBoxExport } from './export'
@@ -280,25 +281,32 @@ export async function sequenceDuBot<T>(
   hote.style.cssText = 'position:fixed;left:-99999px;top:0;width:0;height:0;overflow:hidden'
   document.body.appendChild(hote)
 
-  const date = ref(0)
-  const app = createApp({
-    render: () =>
-      h(BloubBot, { ...reglages, size: taille, frozenAt: date.value, ...(paper ? { paper } : {}) })
-  })
-  app.mount(hote)
+  const [date, setDate] = createSignal(0)
+  const dispose = render(
+    () =>
+      createComponent(BloubBot, {
+        ...reglages,
+        size: taille,
+        get frozenAt() {
+          return date()
+        },
+        ...(paper ? { paper } : {})
+      }),
+    hote
+  )
 
   try {
     const out: T[] = []
     for (let i = 0; i < nombre; i++) {
-      date.value = i * pas
-      await nextTick()
+      setDate(i * pas)
+      await Promise.resolve()
       const svg = hote.querySelector('svg')
       if (!svg) throw new Error('bot hors ecran non rendu')
       out.push(await lis(svg, i))
     }
     return out
   } finally {
-    app.unmount()
+    dispose()
     hote.remove()
   }
 }
@@ -331,10 +339,10 @@ export async function ouvreCycle(
   hote.style.cssText = 'position:fixed;left:-99999px;top:0;width:0;height:0;overflow:hidden'
   document.body.appendChild(hote)
 
-  const bot = ref<{ rendAt: (t: number) => void } | null>(null)
-  const app = createApp({
-    render: () =>
-      h(BloubBot, {
+  let bot: BloubBotRef | undefined
+  const dispose = render(
+    () =>
+      createComponent(BloubBot, {
         ...reglages,
         size: taille,
         cycle: blocs,
@@ -346,31 +354,33 @@ export async function ouvreCycle(
          * meme precaution qu'a l'ecran, ou `state` est amorce sur le bloc courant
          * « pour ne pas entrer en morphant depuis un etat qui n'a jamais ete
          * affiche » (cf. `App.vue`).
-         */
+        */
         state: blocs[0]?.state ?? 'idle',
         frozenAt: 0,
-        ref: bot,
+        ref: (value) => {
+          bot = value
+        },
         ...(paper ? { paper } : {})
-      })
-  })
-  app.mount(hote)
-  await nextTick()
+      }),
+    hote
+  )
+  await Promise.resolve()
 
   const svg = hote.querySelector('svg')
-  if (!svg || !bot.value) {
-    app.unmount()
+  if (!svg || !bot) {
+    dispose()
     hote.remove()
     throw new Error('bot hors ecran non rendu')
   }
 
   return {
     rendre: async (t: number) => {
-      bot.value!.rendAt(t)
-      await nextTick()
+      bot!.renderAt(t)
+      await Promise.resolve()
       return svg
     },
     ferme: () => {
-      app.unmount()
+      dispose()
       hote.remove()
     }
   }

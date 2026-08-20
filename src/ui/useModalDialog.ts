@@ -1,4 +1,4 @@
-import { onBeforeUnmount, watch, type Ref, type ShallowRef } from 'vue'
+import { createEffect, onCleanup, type Accessor } from 'solid-js'
 
 /**
  * Pilote un `<dialog>` natif ouvert en modal depuis un booleen.
@@ -14,19 +14,20 @@ import { onBeforeUnmount, watch, type Ref, type ShallowRef } from 'vue'
  * `@close="open = false" @cancel.prevent="open = false"`.
  */
 export function useModalDialog(
-  open: Ref<boolean>,
-  el: Readonly<ShallowRef<HTMLDialogElement | null>>
+  open: Accessor<boolean>,
+  el: Accessor<HTMLDialogElement | undefined>
 ) {
-  watch(open, (on) => {
-    const dialog = el.value
+  createEffect(() => {
+    const on = open()
+    const dialog = el()
     if (!dialog) return
-    if (on) dialog.showModal()
+    if (on && !dialog.open) dialog.showModal()
     else if (dialog.open) dialog.close()
   })
 
   // le composant peut disparaitre alors que la boite est ouverte (changement de
   // vue) : un `<dialog>` laisse en modal bloquerait la page entiere
-  onBeforeUnmount(() => {
-    if (el.value?.open) el.value.close()
+  onCleanup(() => {
+    if (el()?.open) el()!.close()
   })
 }

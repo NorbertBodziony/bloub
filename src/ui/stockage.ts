@@ -35,6 +35,7 @@ export function cle(nom: NomStocke): string {
  */
 export function lis(nom: NomStocke): string | null {
   try {
+    if (typeof localStorage === 'undefined') return null
     return localStorage.getItem(cle(nom))
   } catch {
     return null
@@ -50,6 +51,7 @@ export function lis(nom: NomStocke): string | null {
  */
 export function ecris(nom: NomStocke, valeur: string) {
   try {
+    if (typeof localStorage === 'undefined') return
     localStorage.setItem(cle(nom), valeur)
   } catch {
     // stockage refuse ou plein : on continue sans persister

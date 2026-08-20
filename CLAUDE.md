@@ -3,16 +3,16 @@
 ## Commands
 
 ```bash
-pnpm dev       # 5190 (set in vite.config.ts, mirrored in .claude/launch.json)
-pnpm test      # vitest
-pnpm build     # vue-tsc --noEmit && vite build
+bun run dev       # 5190 (set in vite.config.ts, mirrored in .claude/launch.json)
+bun run test      # Vitest
+bun run build     # type check, demo build, and package build
 ```
 
-Vue 3.5 + Vite 8 + TS strict + Tailwind 4 (`@tailwindcss/vite` plugin, no
-`tailwind.config.js`), pnpm.
+SolidJS + Vite 8 + TS strict + Tailwind 4 (`@tailwindcss/vite` plugin, no
+`tailwind.config.js`), Bun.
 
 Style: 2 spaces, single quotes, **no semicolons**, comments in French. No ESLint
-and no Prettier: `vue-tsc` is the only gate, so run `pnpm build` before
+and no Prettier: strict TypeScript is the source gate, so run `bun run build` before
 concluding.
 
 ## The most important rule
@@ -106,7 +106,7 @@ Details and the reasoning behind each are in [docs/](docs/):
   arrow-key navigation and focus moved into the menu on open, and they stop exposing the
   children as ordinary buttons. Three popups declared them and implemented none of it, so
   the Tab order didn't match what was announced — they are plain button lists now, with
-  `aria-haspopup="true"` and `aria-expanded`. `Settings.vue` shows the other route: a real
+  `aria-haspopup="true"` and `aria-expanded`. `Settings.tsx` shows the other route: a real
   `radiogroup` with a moving `tabindex`. Pick one, never the label alone.
 - **64rem is the only breakpoint, and it separates two different layouts, not two sizes.**
   Above it the scene is the three-column grid and the page never scrolls (`#app { overflow:
@@ -146,11 +146,11 @@ run it, the component's API. Don't duplicate it here.
 
 ## Tests
 
-`pnpm test` runs in `node` by default. **One file asks for a DOM** and says so on its first
-line (`// @vitest-environment happy-dom`): `ui/capture.test.ts`, which mounts `BloubBot.vue`
+`bun run test` runs in `node` by default. DOM tests ask for `happy-dom` on their first
+line (`// @vitest-environment happy-dom`). `ui/capture.test.ts` mounts `BloubBot.tsx`
 to check the off-screen player — the exported render must be the component's own, not a
-second drawing built beside it. That is also why `vitest.config.ts` carries the Vue plugin.
-Keep the DOM per-file: a global DOM environment would slow the whole suite for one test.
+second drawing built beside it. That is also why `vitest.config.ts` carries the Solid plugin.
+Keep the DOM per-file: a global DOM environment would slow the rest of the suite.
 
 `capture.test.ts` is the one that catches what nothing else can — the export defects are
 invisible short of stepping through an MP4 frame by frame.
@@ -166,7 +166,7 @@ are what `engine.sample(1)` returns for `idle`, byte for byte. `favicon.ico` and
 `apple-touch-icon.png` are rasterised from it.
 
 `docs/demo.gif` and `docs/states.png` are the same idea: rendered by walking
-`engine.sample(t)` and writing the SVG layers in `BloubBot.vue`'s order, then
+`engine.sample(t)` and writing the SVG layers in `BloubBot.tsx`'s order, then
 `rsvg-convert` + `ffmpeg`. They are **not** browser captures: the browser pane
 suspends `requestAnimationFrame` when hidden, so an animation can't be captured
 there at all. To redo them, drive the engine, don't reach for a screenshot.
