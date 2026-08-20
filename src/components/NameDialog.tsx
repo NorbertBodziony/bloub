@@ -1,4 +1,5 @@
-import { createEffect, createSignal, on } from 'solid-js'
+import { createSignal } from 'solid-js'
+import { on } from '@/solid-compat'
 import { t } from '@/i18n'
 import { useModalDialog } from '@/ui/useModalDialog'
 
@@ -16,11 +17,11 @@ export default function NameDialog(props: {
   const [draft, setDraft] = createSignal('')
   useModalDialog(() => props.open, box)
 
-  createEffect(on(() => props.open, (open) => {
+  on(() => props.open, (open) => {
     if (!open) return
     setDraft(props.value)
     queueMicrotask(() => field()?.select())
-  }))
+  })
 
   function submit(event: SubmitEvent) {
     event.preventDefault()

@@ -5,6 +5,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-20
+
+### Changed
+
+- The package now targets SolidJS 2, starting with `solid-js@2.0.0-rc.0` and
+  `@solidjs/web@2.0.0-rc.0`.
+- The application and package builds use the SolidJS 2 Vite plugin.
+
+## [0.2.0] — 2026-08-20
+
+### Added
+
+- A public `@norbert_bodziony/bloub` npm package with the SolidJS avatar, complete animation engine,
+  measured state transitions, cycles, catalogues, gaze helpers and TypeScript types.
+- Isolated package tests for browser builds, SSR imports and the final npm tarball.
+
+### Changed
+
+- The application and public component now use SolidJS and Bun. The framework-free
+  geometry and animation engine keeps its measured timing and paths.
+- The npm archive contains only minified ESM, declarations, the README and the licence.
+  The editor, video encoder, application translations, build tools and source maps stay
+  outside the package.
+
 ### Fixed
 
 - **The Settings and Animations views were unusable below 64rem.** Everything stacks
@@ -90,5 +114,7 @@ fixed, and the measurement is in the commit that fixes it.
 - `StateDef.hint`: 15 hardcoded French strings nothing read, inside a type meant to
   become public.
 
-[unreleased]: https://github.com/NorbertBodziony/bloub/compare/v0.1.1...HEAD
+[unreleased]: https://github.com/NorbertBodziony/bloub/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/NorbertBodziony/bloub/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/NorbertBodziony/bloub/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/NorbertBodziony/bloub/releases/tag/v0.1.1

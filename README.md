@@ -87,12 +87,13 @@ the DOM-less test suite possible.
 ## Using the package
 
 ```bash
-bun add bloub solid-js
+npm install @norbert_bodziony/bloub solid-js@2.0.0-rc.0 @solidjs/web@2.0.0-rc.0
+# or: bun add @norbert_bodziony/bloub solid-js@2.0.0-rc.0 @solidjs/web@2.0.0-rc.0
 ```
 
 ```tsx
 import { createSignal } from 'solid-js'
-import { BloubBot, defaultCycle, type BloubBotRef } from 'bloub'
+import { BloubBot, defaultCycle, type BloubBotRef } from '@norbert_bodziony/bloub'
 
 const [playing, setPlaying] = createSignal(false)
 let bot: BloubBotRef | undefined
@@ -109,6 +110,12 @@ let bot: BloubBotRef | undefined
 index identifies the current item. `state` follows it as an output. Pass
 `frozenAt` to render one exact frame with no animation loop. The component also
 exports a ref with `svg`, `seek(index, offset?)`, and `renderAt(seconds)`.
+
+The package contains the complete avatar engine, all measured state transitions,
+shapes, colours, expressions, cycles, and gaze helpers. It does not contain the
+editor, Tailwind, export dialogs, video encoder, or application translations.
+`solid-js` and `@solidjs/web` stay peer dependencies, so an application keeps one
+Solid runtime. The package supports SolidJS 2, starting with `2.0.0-rc.0`.
 
 Props: `size`, `shape`, `color`, `expression`, `paper`, `frozenAt`, `cycle`,
 `follow`, `gaze`, `ariaLabel`, `block`, `state`, `playing`, and `elapsed`. Each

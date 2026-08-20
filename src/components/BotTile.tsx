@@ -1,4 +1,4 @@
-import type { JSX } from 'solid-js'
+import type { JSX } from '@solidjs/web'
 import BloubBot from './BloubBot'
 import { DEFAULT_EXPRESSION } from '@/bot/expressions'
 import { DEFAULT_COLOR, DEFAULT_SHAPE } from '@/bot/skins'
@@ -24,7 +24,7 @@ export default function BotTile(props: BotTileProps) {
         props.selected ? 'border-[var(--ink)]' : 'border-transparent hover:border-[var(--line)]'
       }`}
       aria-label={props.label}
-      aria-pressed={props.selected}
+      aria-pressed={props.selected ? 'true' : 'false'}
       onClick={props.onClick}
     >
       <BloubBot

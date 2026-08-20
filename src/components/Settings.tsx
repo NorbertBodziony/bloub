@@ -27,7 +27,7 @@ export default function Settings() {
       <div class="mt-2 flex flex-col gap-1" role="radiogroup" aria-label={t('settings.language')}>
         <For each={LANGUES}>
           {(language, index) => (
-            <button type="button" role="radio" aria-checked={language.id === langue()} aria-label={language.nom} lang={language.tag} tabIndex={language.id === langue() ? 0 : -1} onKeyDown={(event) => onKeyboard(event, index())} class={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition ${language.id === langue() ? 'border-[var(--ink)] bg-white font-medium' : 'border-[var(--line)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'}`} onClick={() => setLangue(language.id)}>
+            <button type="button" role="radio" aria-checked={language.id === langue() ? 'true' : 'false'} aria-label={language.nom} lang={language.tag} tabindex={language.id === langue() ? 0 : -1} onKeyDown={(event) => onKeyboard(event, index())} class={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition ${language.id === langue() ? 'border-[var(--ink)] bg-white font-medium' : 'border-[var(--line)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'}`} onClick={() => setLangue(language.id)}>
               <span class="text-base leading-none" aria-hidden="true">{language.emoji}</span>
               <span class="flex-1">{language.nom}</span>
               <Show when={language.id === langue()}><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" class="shrink-0"><path d="M2.5 6.4 4.8 8.7 9.5 3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></Show>

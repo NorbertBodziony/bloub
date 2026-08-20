@@ -17,13 +17,14 @@ export function useModalDialog(
   open: Accessor<boolean>,
   el: Accessor<HTMLDialogElement | undefined>
 ) {
-  createEffect(() => {
-    const on = open()
-    const dialog = el()
+  createEffect(
+    () => [open(), el()] as const,
+    ([on, dialog]) => {
     if (!dialog) return
     if (on && !dialog.open) dialog.showModal()
     else if (dialog.open) dialog.close()
-  })
+    }
+  )
 
   // le composant peut disparaitre alors que la boite est ouverte (changement de
   // vue) : un `<dialog>` laisse en modal bloquerait la page entiere

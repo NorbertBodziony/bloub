@@ -37,7 +37,7 @@ export default function BlockPicker(props: {
 
   return (
     <>
-      <button ref={trigger} type="button" class="flex h-full w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-[var(--line)] text-lg leading-none text-[var(--muted)] transition hover:border-[var(--muted)] hover:text-[var(--ink)]" aria-label={t('timeline.addAnimation')} aria-haspopup="true" aria-expanded={open()} onClick={toggle}>+</button>
+      <button ref={trigger} type="button" class="flex h-full w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-[var(--line)] text-lg leading-none text-[var(--muted)] transition hover:border-[var(--muted)] hover:text-[var(--ink)]" aria-label={t('timeline.addAnimation')} aria-haspopup="true" aria-expanded={open() ? 'true' : 'false'} onClick={toggle}>+</button>
       <div ref={panel} popover="auto" onToggle={(event) => setOpen(event.newState === 'open')} class="m-0 w-72 rounded-xl bg-white p-2 shadow-lg ring-1 ring-black/5" style={position()}>
         <div class="grid grid-cols-4 gap-1.5">
           <For each={PALETTE}>

@@ -64,7 +64,7 @@ export default function Customizer(props: CustomizerProps) {
                   : 'border-transparent hover:border-[var(--line)]'
               }`}
               aria-label={t(`colors.${color.id}`)}
-              aria-pressed={color.id === props.color}
+              aria-pressed={color.id === props.color ? 'true' : 'false'}
               onClick={() => props.onColorChange(color.id)}
             >
               <span

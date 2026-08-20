@@ -16,12 +16,12 @@ export default function CycleMenu(props: {
   const outside = (event: PointerEvent) => {
     if (!root.contains(event.target as Node)) setOpen(false)
   }
-  createEffect(() => open() ? window.addEventListener('pointerdown', outside) : window.removeEventListener('pointerdown', outside))
+  createEffect(open, (opened) => opened ? window.addEventListener('pointerdown', outside) : window.removeEventListener('pointerdown', outside))
   onCleanup(() => window.removeEventListener('pointerdown', outside))
 
   return (
     <div ref={root} class="relative" onKeyDown={(event) => event.key === 'Escape' && setOpen(false)}>
-      <button type="button" class="flex max-w-56 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-left text-sm font-medium transition hover:bg-black/5" aria-haspopup="true" aria-expanded={open()} title={nomDeCycle(props.current)} onClick={() => setOpen(!open())}>
+      <button type="button" class="flex max-w-56 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-left text-sm font-medium transition hover:bg-black/5" aria-haspopup="true" aria-expanded={open() ? 'true' : 'false'} title={nomDeCycle(props.current)} onClick={() => setOpen(!open())}>
         <span class="tronque">{nomDeCycle(props.current)}</span>
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" class="shrink-0 text-[var(--muted)]"><path d="M2 3.5 5 6.5l3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>

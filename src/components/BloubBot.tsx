@@ -5,22 +5,33 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
-  mergeProps,
-  on,
+  onSettled,
   onCleanup,
-  onMount,
-  type JSX
+  untrack,
+  type Accessor,
 } from 'solid-js'
-import { Dynamic } from 'solid-js/web'
-import { NOTIF_BLUE } from '../bot/decor'
-import { BotEngine, type BotFrame } from '../bot/engine'
-import { clamp, easings } from '../bot/math'
-import { lookTarget, TURN_TIME, type GazeScript } from '../ui/gaze'
-import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '../bot/expressions'
-import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '../bot/skins'
-import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles'
-import { DEMI_VIEWBOX, RAYON } from '../bot/repere'
-import { STATE_BY_ID, type StateId } from '../bot/states'
+import { Dynamic, mergeProps, type JSX } from '@solidjs/web'
+import { NOTIF_BLUE } from '../bot/decor.js'
+import { BotEngine, type BotFrame } from '../bot/engine.js'
+import { clamp, easings } from '../bot/math.js'
+import { lookTarget, TURN_TIME, type GazeScript } from '../ui/gaze.js'
+import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '../bot/expressions.js'
+import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '../bot/skins.js'
+import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles.js'
+import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
+import { STATE_BY_ID, type StateId } from '../bot/states.js'
+
+function watch<T>(
+  source: Accessor<T>,
+  effect: (value: T, previous: T | undefined) => void,
+  options?: { defer?: boolean }
+) {
+  createEffect(
+    source,
+    (value, previous) => { untrack(() => effect(value, previous)) },
+    options?.defer ? { defer: true } : undefined
+  )
+}
 
 export interface BloubBotRef {
   readonly svg: SVGSVGElement
@@ -97,8 +108,8 @@ export default function BloubBot(rawProps: BloubBotProps) {
   const ink = createMemo(() => COLOR_BY_ID.get(props.color)?.hex ?? '#0a0a0c')
   const expression = createMemo(() => EXPRESSION_BY_ID.get(props.expression) ?? null)
 
-  const engine = new BotEngine(RAYON, state(), shapeRadii(), expression())
-  const [frame, setFrame] = createSignal<BotFrame>(engine.sample(props.frozenAt ?? 0), {
+  const engine = untrack(() => new BotEngine(RAYON, state(), shapeRadii(), expression()))
+  const [frame, setFrame] = createSignal<BotFrame>(untrack(() => engine.sample(props.frozenAt ?? 0)), {
     equals: false
   })
   const uid = createUniqueId()
@@ -228,8 +239,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
     setFrame(engine.sample(props.frozenAt))
   }
 
-  createEffect(
-    on(
+  watch(
       () => props.gaze,
       (run) => {
         if (run) {
@@ -241,33 +251,25 @@ export default function BloubBot(rawProps: BloubBotProps) {
           scripted = false
         }
       }
-    )
   )
 
-  createEffect(
-    on(block, (index) => {
+  watch(block, (index) => {
       apply(index, pendingOffset)
       pendingOffset = 0
     }, { defer: true })
-  )
 
-  createEffect(
-    on(state, (id) => {
+  watch(state, (id) => {
       if (engine.state === id) return
       engine.setState(id, clock)
       redrawFrozen()
     }, { defer: true })
-  )
 
-  createEffect(
-    on(playing, (on) => {
+  watch(playing, (on) => {
       if (on) apply(block(), elapsed())
       else nextAt = Infinity
     }, { defer: true })
-  )
 
-  createEffect(
-    on(
+  watch(
       () => props.cycle,
       (blocks) => {
         if (!blocks.length) {
@@ -279,33 +281,34 @@ export default function BloubBot(rawProps: BloubBotProps) {
         else nextAt = playing() ? blockStart + blocks[index]!.duration : Infinity
       },
       { defer: true }
-    )
   )
 
-  createEffect(on(shapeRadii, (radii) => {
+  watch(shapeRadii, (radii) => {
     engine.setShape(radii, clock)
     redrawFrozen()
-  }, { defer: true }))
+  }, { defer: true })
 
-  createEffect(on(expression, (value) => {
+  watch(expression, (value) => {
     engine.setExpression(value, clock)
     redrawFrozen()
-  }, { defer: true }))
+  }, { defer: true })
 
-  createEffect(on(() => props.frozenAt, redrawFrozen, { defer: true }))
+  watch(() => props.frozenAt, redrawFrozen, { defer: true })
 
-  createEffect(() => {
-    const on = props.follow && props.frozenAt === undefined
-    if (on) {
+  createEffect(
+    () => props.follow && props.frozenAt === undefined,
+    (following) => {
+    if (following) {
       window.addEventListener('pointermove', onPointerMove)
       document.addEventListener('pointerleave', onPointerLeave)
     } else {
       detach()
       release()
     }
-  })
+    }
+  )
 
-  onMount(() => {
+  onSettled(() => {
     rawProps.ref?.({ get svg() { return svg }, seek, renderAt })
     if (props.frozenAt !== undefined) return
     apply(block(), elapsed())

@@ -5,7 +5,7 @@ import {
   defaultCycle,
   type BloubBotRef,
   type StateId
-} from 'bloub'
+} from '@norbert_bodziony/bloub'
 
 const [playing, setPlaying] = createSignal(false)
 let bot: BloubBotRef | undefined

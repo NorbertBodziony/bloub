@@ -47,11 +47,14 @@ createRoot(() => {
   dictionnaire = createMemo(() => dictionnaires[courante()])
   tag = createMemo(() => tagDe(courante()))
 
-  createEffect(() => {
-    if (typeof document === 'undefined') return
-    document.documentElement.lang = tag()
-    document.title = t('app.title')
-  })
+  createEffect(
+    () => [tag(), t('app.title')] as const,
+    ([languageTag, title]) => {
+      if (typeof document === 'undefined') return
+      document.documentElement.lang = languageTag
+      document.title = title
+    }
+  )
 })
 
 /**

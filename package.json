@@ -1,7 +1,7 @@
 {
-  "name": "bloub",
+  "name": "@norbert_bodziony/bloub",
   "private": false,
-  "version": "0.1.1",
+  "version": "0.2.1",
   "type": "module",
   "description": "SVG recreation of the x.ai bot avatar. One shape morphing through 14 states, measured off the reference video frame by frame.",
   "license": "MIT",
@@ -11,6 +11,9 @@
     "url": "git+https://github.com/NorbertBodziony/bloub.git"
   },
   "homepage": "https://bloub-app.pages.dev",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "svg",
     "animation",
@@ -20,7 +23,9 @@
   ],
   "packageManager": "bun@1.4.0",
   "files": [
-    "dist/package"
+    "dist/package/index.js",
+    "dist/package/server.js",
+    "dist/package/types"
   ],
   "types": "./dist/package/types/index.d.ts",
   "exports": {
@@ -41,22 +46,26 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:package": "bun run build:package && tsc -p tsconfig.package-test.json && bun -e \"import { BotEngine } from 'bloub'; console.log(new BotEngine().sample(0).bodyPath.length)\"",
-    "pack:check": "bun run test:package && bun pm pack --dry-run"
+    "test:package": "bun run build:package && tsc -p tsconfig.package-test.json && bun tests/package-runtime.ts",
+    "test:tarball": "bun tools/test-package-tarball.mjs",
+    "pack:check": "bun run test:package && bun run test:tarball",
+    "prepublishOnly": "bun run test && bun run typecheck && bun run pack:check"
   },
   "peerDependencies": {
-    "solid-js": "^1.9.15"
+    "@solidjs/web": "^2.0.0-rc.0",
+    "solid-js": "^2.0.0-rc.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.0.0",
+    "@solidjs/vite-plugin": "3.0.0-next.30",
+    "@solidjs/web": "2.0.0-rc.0",
     "happy-dom": "^20.11.2",
     "mediabunny": "^1.54.0",
-    "solid-js": "^1.9.15",
+    "solid-js": "2.0.0-rc.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.2.1",
-    "vite-plugin-solid": "^2.11.14",
     "vitest": "^4.1.10"
   }
 }

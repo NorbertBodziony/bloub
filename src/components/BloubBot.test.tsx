@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render } from 'solid-js/web'
+import { render } from '@solidjs/web'
 import { describe, expect, it, vi } from 'vitest'
 import BloubBot, { type BloubBotRef } from './BloubBot'
 import { defaultCycle } from '@/bot/cycles'

@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
-import solid from 'vite-plugin-solid'
+import solid from '@solidjs/vite-plugin'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -11,10 +11,10 @@ export default defineConfig({
   build: {
     outDir: 'dist/package',
     emptyOutDir: false,
-    sourcemap: true,
+    minify: 'oxc',
     ssr: 'src/index.ts',
     rollupOptions: {
-      external: [/^solid-js(?:\/|$)/],
+      external: [/^@solidjs\/web(?:\/|$)/, /^solid-js(?:\/|$)/],
       output: { entryFileNames: 'server.js' }
     }
   }

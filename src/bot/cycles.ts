@@ -1,4 +1,4 @@
-import { SEQUENCE, STATES, STATE_BY_ID, type StateId } from './states'
+import { SEQUENCE, STATES, STATE_BY_ID, type StateId } from './states.js'
 
 /**
  * Un cycle est un montage : une suite de blocs, chacun un etat tenu pendant une

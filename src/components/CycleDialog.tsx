@@ -28,9 +28,10 @@ export default function CycleDialog(props: {
   const busy = () => props.avancement !== null
   const percent = createMemo(() => Math.round((props.avancement ?? 0) * 100))
 
-  createEffect(() => {
-    if (!formats.includes(props.format)) props.onFormatChange(formats[0]!)
-  })
+  createEffect(
+    () => props.format,
+    (format) => { if (!formats.includes(format)) props.onFormatChange(formats[0]!) }
+  )
 
   function confirm(event: SubmitEvent) {
     event.preventDefault()

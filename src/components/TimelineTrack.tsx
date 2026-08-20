@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, on, onMount } from 'solid-js'
+import { For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js'
+import { on, onMount } from '@/solid-compat'
 import BlockPicker from './BlockPicker'
 import BloubBot from './BloubBot'
 import { clampDuration, moveBlock, offsetOf, STEP, totalDuration, type Block } from '@/bot/cycles'
@@ -49,8 +50,8 @@ export default function TimelineTrack(props: {
     props.onZoomChange(clampZoom(next))
   }
 
-  let oldScale = scale()
-  createEffect(on(scale, (now) => {
+  let oldScale = untrack(scale)
+  on(scale, (now) => {
     if (!track) return
     const box = track.getBoundingClientRect()
     const x = (anchorX ?? box.left + track.clientWidth / 2) - box.left
@@ -58,7 +59,7 @@ export default function TimelineTrack(props: {
     oldScale = now
     anchorX = null
     queueMicrotask(() => { track.scrollLeft = second * now - x; onScroll() })
-  }, { defer: true }))
+  }, { defer: true })
 
   function onWheel(event: WheelEvent) {
     const unit = event.deltaMode === 1 ? 16 : 1
@@ -75,11 +76,11 @@ export default function TimelineTrack(props: {
   }
 
   onMount(onScroll)
-  createEffect(() => { total(); props.blocks; queueMicrotask(onScroll) })
-  createEffect(on(() => props.block, (block) => {
+  createEffect(() => [total(), props.blocks] as const, () => queueMicrotask(onScroll))
+  on(() => props.block, (block) => {
     const x = offsetOf(props.blocks, block) * scale()
     if (x < track.scrollLeft || x + width(block) > track.scrollLeft + track.clientWidth) track.scrollTo({ left: Math.max(0, x - 24), behavior: 'smooth' })
-  }, { defer: true }))
+  }, { defer: true })
 
   function removeBlock(index: number) {
     if (props.blocks.length < 2) return

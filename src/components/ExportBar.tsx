@@ -18,7 +18,7 @@ export default function ExportBar(props: { etat: EtatExport; onExport: (id: Acti
   const outside = (event: PointerEvent) => {
     if (!root.contains(event.target as Node)) setOpen(false)
   }
-  createEffect(() => open() ? window.addEventListener('pointerdown', outside) : window.removeEventListener('pointerdown', outside))
+  createEffect(open, (opened) => opened ? window.addEventListener('pointerdown', outside) : window.removeEventListener('pointerdown', outside))
   onCleanup(() => window.removeEventListener('pointerdown', outside))
 
   function launch(id: ActionId) {
@@ -38,7 +38,7 @@ export default function ExportBar(props: { etat: EtatExport; onExport: (id: Acti
           {label()}
         </button>
         <div class="w-px self-stretch bg-current opacity-25" />
-        <button type="button" class="flex cursor-pointer items-center px-2.5 transition hover:bg-white/10 disabled:cursor-default" disabled={busy()} aria-label={t('export.more')} aria-haspopup="true" aria-expanded={open()} onClick={() => setOpen(!open())}>
+        <button type="button" class="flex cursor-pointer items-center px-2.5 transition hover:bg-white/10 disabled:cursor-default" disabled={busy()} aria-label={t('export.more')} aria-haspopup="true" aria-expanded={open() ? 'true' : 'false'} onClick={() => setOpen(!open())}>
           <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" class={`transition-transform ${open() ? 'rotate-180' : ''}`}><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9L12 15L5 9" /></svg>
         </button>
       </div>

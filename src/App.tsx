@@ -1,4 +1,5 @@
-import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js'
+import { For, Match, Show, Switch, createMemo, createSignal, onCleanup } from 'solid-js'
+import { on, onMount } from '@/solid-compat'
 import BotTile from '@/components/BotTile'
 import Customizer from '@/components/Customizer'
 import BloubBot, { type BloubBotRef } from '@/components/BloubBot'
@@ -37,6 +38,16 @@ function stored(name: NomStocke, fallback: string, exists: (value: string) => bo
   return value && exists(value) ? value : fallback
 }
 
+function locateInCycles(cycles: Cycle[], activeId: string, id: StateId) {
+  const active = cycles.find((item) => item.id === activeId) ?? cycles[0]!
+  const order = [active, ...cycles.filter((item) => item.id !== active.id)]
+  for (const item of order) {
+    const index = item.blocks.findIndex((candidate) => candidate.state === id)
+    if (index >= 0) return { id: item.id, index }
+  }
+  return null
+}
+
 const REST = [makeBlock('idle')]
 const ENTREE = [makeBlock('swirl'), makeBlock('idle')]
 const ENTREE_CALME = [makeBlock('idle')]
@@ -52,36 +63,37 @@ export default function App() {
   const [quiet, setQuiet] = createSignal(quietQuery.matches)
   const [navigationEntry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
   const navigation = navigationEntry?.type ?? 'navigate'
-  const [intro, setIntro] = createSignal(initial.arrivee || introDue({ named: initial.named, gallery: initial.gallery, rechargement: navigation !== 'navigate', calme: quiet() }))
+  const initialIntro = initial.arrivee || introDue({ named: initial.named, gallery: initial.gallery, rechargement: navigation !== 'navigate', calme: quietQuery.matches })
+  const [intro, setIntro] = createSignal(initialIntro)
 
   const restored = parseCycles(lis('cycles'))
-  const [cycles, setCycles] = createSignal<Cycle[]>(restored.length ? restored : [defaultCycle()])
-  const [activeId, setActiveId] = createSignal(stored('cycle', cycles()[0]!.id, (value) => cycles().some((cycle) => cycle.id === value)))
-  const [block, setBlock] = createSignal(0)
+  const initialCycles = restored.length ? restored : [defaultCycle()]
+  let initialActiveId = stored('cycle', initialCycles[0]!.id, (value) => initialCycles.some((cycle) => cycle.id === value))
+  let initialBlock = 0
+  if (initial.named) {
+    const found = locateInCycles(initialCycles, initialActiveId, initial.state)
+    if (found) {
+      initialActiveId = found.id
+      initialBlock = found.index
+    }
+  }
+
+  const [cycles, setCycles] = createSignal<Cycle[]>(initialCycles)
+  const [activeId, setActiveId] = createSignal(initialActiveId)
+  const [block, setBlock] = createSignal(initialBlock)
   const [elapsed, setElapsed] = createSignal(0)
   const cycle = createMemo(() => cycles().find((item) => item.id === activeId()) ?? cycles()[0]!)
 
   function locate(id: StateId) {
-    const order = [cycle(), ...cycles().filter((item) => item.id !== activeId())]
-    for (const item of order) {
-      const index = item.blocks.findIndex((candidate) => candidate.state === id)
-      if (index >= 0) return { id: item.id, index }
-    }
-    return null
+    return locateInCycles(cycles(), activeId(), id)
   }
 
-  if (initial.named) {
-    const found = locate(initial.state)
-    if (found) {
-      setActiveId(found.id)
-      setBlock(found.index)
-    }
-  }
-
-  const [state, setState] = createSignal<StateId>(intro() ? 'idle' : (cycle().blocks[block()]?.state ?? 'idle'))
-  const [view, setView] = createSignal<ViewId>(initial.named ? 'animations' : 'personnaliser')
+  const initialCycle = initialCycles.find((item) => item.id === initialActiveId) ?? initialCycles[0]!
+  const initialView: ViewId = initial.named ? 'animations' : 'personnaliser'
+  const [state, setState] = createSignal<StateId>(initialIntro ? 'idle' : (initialCycle.blocks[initialBlock]?.state ?? 'idle'))
+  const [view, setView] = createSignal<ViewId>(initialView)
   const [preview, setPreview] = createSignal(false)
-  const [playing, setPlaying] = createSignal(intro() || (initial.playing && view() === 'animations'))
+  const [playing, setPlaying] = createSignal(initialIntro || (initial.playing && initialView === 'animations'))
   const [shape, setShape] = createSignal(stored('forme', DEFAULT_SHAPE, (value) => SHAPE_BY_ID.has(value)))
   const [color, setColor] = createSignal(stored('couleur', DEFAULT_COLOR, (value) => COLOR_BY_ID.has(value)))
   const [expression, setExpression] = createSignal(stored('expression', DEFAULT_EXPRESSION, (value) => EXPRESSION_BY_ID.has(value)))
@@ -92,22 +104,22 @@ export default function App() {
     clearTimeout(pendingSave)
     ecris('cycles', JSON.stringify(cycles()))
   }
-  createEffect(on(cycles, () => { clearTimeout(pendingSave); pendingSave = setTimeout(saveCycles, 250) }, { defer: true }))
-  createEffect(on(activeId, (value) => ecris('cycle', value), { defer: true }))
-  createEffect(on(shape, (value) => ecris('forme', value), { defer: true }))
-  createEffect(on(color, (value) => ecris('couleur', value), { defer: true }))
-  createEffect(on(expression, (value) => ecris('expression', value), { defer: true }))
-  createEffect(on(preview, setPlaying, { defer: true }))
+  on(cycles, () => { clearTimeout(pendingSave); pendingSave = setTimeout(saveCycles, 250) }, { defer: true })
+  on(activeId, (value) => ecris('cycle', value), { defer: true })
+  on(shape, (value) => ecris('forme', value), { defer: true })
+  on(color, (value) => ecris('couleur', value), { defer: true })
+  on(expression, (value) => ecris('expression', value), { defer: true })
+  on(preview, setPlaying, { defer: true })
 
   let writtenHash = ''
-  createEffect(on(() => [state(), playing()] as const, ([id, on]) => {
+  on(() => [state(), playing()] as const, ([id, on]) => {
     if (view() !== 'animations') return
     writtenHash = `#etat=${id}${on ? '' : '&stop'}`
     location.replace(writtenHash)
-  }, { defer: true }))
+  }, { defer: true })
 
   let resume = initial.named && initial.playing
-  let resumeBlock = block()
+  let resumeBlock = initialBlock
   const played = createMemo(() => {
     if (intro()) return INTRO
     if (view() === 'animations') return cycle().blocks
@@ -115,7 +127,7 @@ export default function App() {
     return quiet() ? ENTREE_CALME : ENTREE
   })
 
-  createEffect(on(view, (now, before) => {
+  on(view, (now, before) => {
     setIntro(false)
     if (before === 'animations') {
       resume = playing()
@@ -128,16 +140,16 @@ export default function App() {
       setBlock(0)
       setPlaying(now === 'reglages')
     }
-  }, { defer: true }))
+  }, { defer: true })
 
-  createEffect(on(block, (index) => {
+  on(block, (index) => {
     if (intro()) {
       if (index >= INTRO.length - 1) {
         setIntro(false)
         setPlaying(false)
       }
     } else if (view() === 'reglages' && index > 0) setPlaying(false)
-  }, { defer: true }))
+  }, { defer: true })
 
   const bare = createMemo(() => intro() && block() < POSE_AT)
   const leftOpen = createMemo(() => !bare() && view() === 'reglages')
@@ -146,12 +158,12 @@ export default function App() {
   const order = createMemo(() => SEQUENCE.map((id) => STATES.find((state) => state.id === id)!))
 
   let moodTimer: ReturnType<typeof setInterval> | undefined
-  createEffect(on(view, (current) => {
+  on(view, (current) => {
     clearInterval(moodTimer)
     if (current !== 'reglages') return setMood(null)
     let index = 0
     moodTimer = setInterval(() => setMood(HUMEURS[index++ % HUMEURS.length]!), HUMEUR_MS)
-  }))
+  })
 
   function addBlock(id: StateId) {
     setCycles((items) => items.map((item) => item.id === cycle().id ? { ...item, blocks: blocksWith(item.blocks, id) } : item))
@@ -165,12 +177,12 @@ export default function App() {
 
   const [exportBarHidden, setExportBarHidden] = createSignal(false)
   let exportBarTimer: ReturnType<typeof setTimeout> | undefined
-  createEffect(on(bare, (still, before) => {
+  on(bare, (still, before) => {
     if (!before || still) return
     setExportBarHidden(true)
     clearTimeout(exportBarTimer)
     exportBarTimer = setTimeout(() => setExportBarHidden(false), RETARD_ARRIVEE)
-  }, { defer: true }))
+  }, { defer: true })
 
   const [cycleDialog, setCycleDialog] = createSignal(false)
   const [cycleFormat, setCycleFormat] = createSignal<FormatCycle>(FORMAT_CYCLE_DEFAUT)
@@ -205,7 +217,7 @@ export default function App() {
       cycleAbort = null
     }
   }
-  createEffect(on(cycleDialog, (open) => open && setCycleError(false), { defer: true }))
+  on(cycleDialog, (open) => open && setCycleError(false), { defer: true })
 
   const [exportState, setExportState] = createSignal<EtatExport>('pret')
   const [gifBackground, setGifBackground] = createSignal<FondGif>(FOND_GIF_DEFAUT)
@@ -247,7 +259,7 @@ export default function App() {
     confirmation = setTimeout(() => setExportState('pret'), CONFIRMATION_MS)
   }
 
-  createEffect(on(view, (current) => queueMicrotask(() => current === 'reglages' && bot?.seek(0, 0)), { defer: true }))
+  on(view, (current) => queueMicrotask(() => current === 'reglages' && bot?.seek(0, 0)), { defer: true })
 
   function onHashChange() {
     if (location.hash === writtenHash) {
@@ -275,12 +287,12 @@ export default function App() {
     window.addEventListener('pagehide', saveCycles)
     window.addEventListener('hashchange', onHashChange)
     window.addEventListener('keydown', onKeyDown)
-    onCleanup(() => {
+    return () => {
       quietQuery.removeEventListener('change', onQuiet)
       window.removeEventListener('pagehide', saveCycles)
       window.removeEventListener('hashchange', onHashChange)
       window.removeEventListener('keydown', onKeyDown)
-    })
+    }
   })
   onCleanup(() => {
     clearInterval(moodTimer)

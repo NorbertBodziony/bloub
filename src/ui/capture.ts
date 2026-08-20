@@ -11,7 +11,7 @@
  */
 
 import { createComponent, createSignal } from 'solid-js'
-import { render } from 'solid-js/web'
+import { render } from '@solidjs/web'
 import BloubBot, { type BloubBotRef } from '@/components/BloubBot'
 import type { Block } from '@/bot/cycles'
 import { gifAnime, gifIndexe, indexe, nouvellePalette, recense, svgAnime } from './anime'
