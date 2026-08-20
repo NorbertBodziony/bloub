@@ -1,18 +1,90 @@
 name: ci
-# `push` limite a main, sinon chaque branche de PR declenche DEUX fois le meme job — une
-# fois pour le push, une fois pour la PR — sur exactement le meme commit.
+
+# `push` reste limite a main pour ne pas executer deux fois la verification
+# d'une branche qui a deja une pull request ouverte.
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verifie:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm test
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # Bun 1.4.0 est encore publie sur le canal canary.
+          bun-version: canary
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+      - run: bun run build
+      - run: bun run pack:check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-dist
+          path: dist/app
+          if-no-files-found: error
+          retention-days: 1
+
+  apercu:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: verifie
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-dist
+          path: dist/app
+      - name: Deploie l'apercu Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/app --project-name=bloub-app --branch=pr-${{ github.event.pull_request.number }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publie le lien dans la pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+        run: >-
+          gh pr comment "${{ github.event.pull_request.number }}"
+          --repo "${{ github.repository }}"
+          --edit-last
+          --create-if-none
+          --body "Apercu Cloudflare Pages : [${PREVIEW_URL}](${PREVIEW_URL})"
+
+  production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verifie
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-dist
+          path: dist/app
+      - name: Deploie Cloudflare Pages en production
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/app --project-name=bloub-app --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,8 @@
 # bloub
 
+[Live demo](https://bloub-app.pages.dev) ·
+[![CI](https://github.com/NorbertBodziony/bloub/actions/workflows/ci.yml/badge.svg)](https://github.com/NorbertBodziony/bloub/actions/workflows/ci.yml)
+
 An SVG recreation of the x.ai bot avatar: **one filled black shape** that morphs
 between 14 states, **two white shapes** for the eyes that morph independently, on
 a plain background. No animation library.
