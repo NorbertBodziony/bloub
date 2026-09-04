@@ -118,9 +118,16 @@ editor, Tailwind, export dialogs, video encoder, or application translations.
 Solid runtime. The package supports SolidJS 2, starting with `2.0.0-rc.0`.
 
 Props: `size`, `shape`, `color`, `expression`, `paper`, `frozenAt`, `cycle`,
-`follow`, `gaze`, `ariaLabel`, `block`, `state`, `playing`, and `elapsed`. Each
-playback value has a matching `on...Change` callback. See
+`follow`, `gaze`, `ariaLabel`, `block`, `state`, `playing`, `elapsed`, `fps`, and
+`autoPause`. Each playback value has a matching `on...Change` callback. See
 [BloubBot.tsx](src/components/BloubBot.tsx) for the details.
+
+An animated bot costs a style recalculation, a layout and a paint per drawn
+frame, so its price is set by how often it draws and by how many of them are on
+screen. `fps` caps the rate — a 40 px avatar in a list is indistinguishable at 30
+from the screen's 120 — and `autoPause`, on by default, stops the loop when the
+bot is off screen or its tab is in the background. Neither changes what the bot
+looks like while someone is watching it.
 
 ## Changes
 

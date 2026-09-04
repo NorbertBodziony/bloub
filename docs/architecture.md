@@ -29,6 +29,40 @@ re-reading a date from before the end of a fade would no longer find it. This
 already went wrong once, on the shape morph, and there is a dedicated test for it
 (`engine.test.ts`, "reste une fonction pure du temps pendant un morph de forme").
 
+## The render loop is what the bot costs
+
+The engine is free; drawing is not. Each drawn frame is a style recalculation, a
+layout and a paint, so the price of a bot is *how often it draws* multiplied by
+*how many are on screen*. In an Electron 44 window on a 75 Hz display, two 46 px
+avatars measured 30 % of a renderer process and 24 % of a GPU process, for a
+shape smaller than a favicon.
+
+Three things follow, and all three live in `BloubBot.tsx`, not in `src/bot/`:
+
+- **The lists are matched by position, not by object identity** (`keyed={false}`).
+  `sample()` returns a fresh array every frame, so identity matching destroyed and
+  recreated every dot, eye, arc and gradient at the screen's rate. Matched by
+  position the nodes live and only their attributes move: about 1300 live nodes
+  for two avatars became about 15. That is allocation and garbage collection, not
+  layout — a drawn frame costs the same either way, which is what the two props
+  below are for. Document order is unchanged, which `capture.ts` depends on to
+  read the eye matrices out of the mask.
+- **`fps` caps the rate, and the clock is not capped with it.** The clock always
+  advances, only the drawing is skipped, so a throttled bot is late by nothing —
+  it is merely drawn less often. The rate lands on the largest divisor of the
+  screen's rate that does not exceed `fps`, so the interval stays even.
+- **`autoPause` stops the loop when nobody can see the bot.** An
+  `IntersectionObserver` covers both ways of being off screen — scrolled away, and
+  an ancestor that is not rendered — and `visibilitychange` covers the background
+  tab. The loop restarts with `last = 0`, so the first frame after a pause has a
+  `dt` of zero: the bot resumes on the pose it held instead of leaping forward by
+  the length of the pause. Absent an `IntersectionObserver` the bot is treated as
+  visible: the throttle is an economy, never a condition of being displayed.
+
+`frozenAt` remains the only way to have no loop at all, and it is what the export
+path uses — it drives its off-screen bot with `renderAt`, so the pause has nothing
+to do there.
+
 ## The montage holds or cuts, it never scales time
 
 `cycles.ts` stretches a block by letting the state run longer (looping states do

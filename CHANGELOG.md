@@ -5,6 +5,32 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-04
+
+### Added
+
+- `fps`, a maximum render rate. Without it the bot draws at the screen's rate, so
+  the same animation costs twice as much on a 120 Hz panel as on a 60 Hz one. The
+  rendered rate falls on the largest divisor of the screen's rate that does not
+  exceed `fps`, which keeps the interval even.
+- `autoPause` (on by default): the loop stops when nobody can see the bot — tab in
+  the background, element scrolled out of the viewport, `display: none` ancestor —
+  and the clock stops with it, so the animation resumes on the pose it held
+  instead of jumping. Set it to `false` if something other than `renderAt` reads
+  the SVG off screen.
+
+### Fixed
+
+- A visible bot no longer rebuilds its SVG nodes on every frame. The engine
+  returns a fresh array each frame, and the lists were matched by object
+  identity, so every dot, eye, arc and gradient was destroyed and recreated once
+  per frame. The lists are matched by position now, so the nodes live and only
+  their attributes move. Measured on two 46 px avatars at 60 Hz: the live node
+  count of the document drops from about 1300 to about 15, which is allocation
+  and garbage collection that no longer happens. Frame cost itself is unchanged —
+  a bot still recalculates style and lays out once per drawn frame either way,
+  which is what `fps` and `autoPause` are for.
+
 ## [0.2.1] — 2026-08-20
 
 ### Changed

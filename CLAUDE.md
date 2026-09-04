@@ -117,6 +117,12 @@ Details and the reasoning behind each are in [docs/](docs/):
   Anything new that is `fixed`, or anchored to the bottom of `#app`, needs its own answer
   below 64rem. `--timeline` also changes there (236 → 200 px); the fine positioning that
   reads it lives inside the `>= 64rem` query and never sees the other value.
+- **A drawn frame is a style recalculation, a layout and a paint**, so what a bot costs
+  is how often it draws times how many are on screen — two 46 px avatars measured 30 % of
+  a renderer process. Hence `fps` (a cap on the rate, never on the clock), `autoPause`
+  (no loop when nobody can see the bot) and lists matched by POSITION: `sample()` returns
+  a fresh array each frame, so identity matching recreated every SVG node at the screen's
+  rate. `docs/architecture.md` "The render loop is what the bot costs" has the details.
 - **`prefers-reduced-motion` is followed at runtime, not read once**, and it draws a line:
   it cancels box transitions and the settings view's `swirl` entry, which are decoration;
   it does **not** cancel the breathing, gaze drift and blinking, which are what the bot IS.
