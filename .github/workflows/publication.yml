@@ -1,0 +1,69 @@
+name: publication
+
+# Le tag est le declencheur : `git tag v0.3.0 && git push origin v0.3.0`.
+# Aucun jeton n'est stocke ici. npm authentifie le workflow par OIDC
+# (« trusted publishing »), ce qui demande une seule chose, une fois, sur
+# npmjs.com > @norbert_bodziony/bloub > Settings > Trusted publisher :
+# depot NorbertBodziony/bloub, workflow publication.yml. Un jeton
+# d'automatisation n'expire jamais tout seul mais fuit, celui-ci ne quitte
+# jamais le runner et signe la provenance du paquet au passage.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Sans cette permission le runner ne peut pas demander de jeton OIDC et
+      # la publication echoue avant meme de contacter le registre.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # Bun 1.4.0 est encore publie sur le canal canary.
+          bun-version: canary
+      - run: bun install --frozen-lockfile
+
+      # Le registre refuse une version deja prise, mais bien apres avoir
+      # execute la suite : le tag et `package.json` sont compares d'abord pour
+      # qu'un tag mal nomme coute quelques secondes et non quelques minutes.
+      - name: Verifie que le tag porte la version du paquet
+        run: |
+          version="$(jq -r .version package.json)"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Le tag ${GITHUB_REF_NAME} ne correspond pas a la version v${version} de package.json." >&2
+            exit 1
+          fi
+
+      # Une version deja sur le registre n'est pas une erreur : un tag peut etre
+      # rejoue, et une version peut avoir ete publiee a la main. Le travail est
+      # simplement fait, donc l'etape suivante est sautee au lieu de peindre la
+      # publication en rouge.
+      - name: Cherche la version sur le registre
+        id: registre
+        run: |
+          version="$(jq -r .version package.json)"
+          if npm view "@norbert_bodziony/bloub@${version}" version >/dev/null 2>&1; then
+            echo "@norbert_bodziony/bloub@${version} est deja publiee, rien a faire."
+            echo 'publier=non' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publier=oui' >> "$GITHUB_OUTPUT"
+          fi
+
+      # Le « trusted publishing » demande npm 11.5.1 ou plus, que Node 24
+      # n'embarque pas encore. `prepublishOnly` rejoue les tests, le typecheck
+      # et `pack:check`, donc la publication elle-meme est deja gardee.
+      - if: steps.registre.outputs.publier == 'oui'
+        run: npm install --global npm@latest
+      - if: steps.registre.outputs.publier == 'oui'
+        run: npm publish
