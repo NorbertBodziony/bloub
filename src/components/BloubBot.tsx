@@ -54,6 +54,22 @@ export interface BloubBotProps {
   state?: StateId
   playing?: boolean
   elapsed?: number
+  /**
+   * Cadence maximale de rendu, en images par seconde. Sans elle le bot dessine a
+   * la cadence de l'ecran : sur un 120 Hz c'est deux fois le travail d'un 60 Hz
+   * pour la meme animation. Le rendu tombe sur le plus grand diviseur de la
+   * cadence de l'ecran qui ne depasse pas `fps`, donc l'intervalle reste
+   * regulier — un bot bride a 30 sur un ecran a 75 Hz dessine a 25.
+   */
+  fps?: number
+  /**
+   * Suspend la boucle quand personne ne peut voir le bot : onglet en arriere-plan,
+   * element sorti du viewport, ancetre `display: none`. L'horloge s'arrete avec
+   * elle, donc l'animation reprend sur la pose qu'elle avait — elle ne saute pas.
+   * A mettre a `false` seulement si le SVG est lu hors ecran par autre chose que
+   * `renderAt` (l'export, lui, passe par `frozenAt` et n'a jamais de boucle).
+   */
+  autoPause?: boolean
   onBlockChange?: (value: number) => void
   onStateChange?: (value: StateId) => void
   onPlayingChange?: (value: boolean) => void
@@ -74,6 +90,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
       cycle: defaultCycle().blocks,
       follow: false,
       gaze: null,
+      autoPause: true,
       ariaLabel: 'Animated Bloub avatar'
     },
     rawProps
@@ -117,6 +134,8 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
   let svg!: SVGSVGElement
   let raf = 0
+  /** instant de la derniere image DESSINEE, pour la bride `fps` */
+  let drawn = -Infinity
   let nextAt = Infinity
   let last = 0
   let clock = 0
@@ -224,6 +243,16 @@ export default function BloubBot(rawProps: BloubBotProps) {
     last = ms
     clock += dt
 
+    /*
+     * L'horloge avance toujours, le dessin non : une image sautee ne fait pas
+     * perdre de temps a l'animation, elle la rend seulement moins souvent. La
+     * comparaison porte sur l'horloge du bot et pas sur `ms`, pour que la pause
+     * automatique ne compte pas comme du retard a rattraper.
+     */
+    const budget = props.fps && props.fps > 0 ? 1 / props.fps : 0
+    if (clock - drawn < budget) return
+    drawn = clock
+
     if (playing()) {
       if (clock >= nextAt && props.cycle.length) goToBlock((block() + 1) % props.cycle.length)
       else setElapsed(clock - blockStart)
@@ -308,15 +337,76 @@ export default function BloubBot(rawProps: BloubBotProps) {
     }
   )
 
+  /*
+   * La boucle demarre avec `last = 0` : la premiere image d'une reprise a donc un
+   * `dt` nul, ce qui interdit le saut qu'un `ms` vieux de plusieurs secondes
+   * provoquerait.
+   */
+  function run() {
+    if (raf || typeof requestAnimationFrame === 'undefined') return
+    last = 0
+    raf = requestAnimationFrame(tick)
+  }
+
+  function halt() {
+    if (!raf) return
+    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf)
+    raf = 0
+  }
+
+  const [onscreen, setOnscreen] = createSignal(true)
+  const [shown, setShown] = createSignal(true)
+  const [mounted, setMounted] = createSignal(false)
+
+  /*
+   * Un seul endroit decide si la boucle tourne, et il ne demarre jamais avant le
+   * montage : `apply` doit avoir pose l'etat du bloc courant, sinon la premiere
+   * image morphe depuis `idle`.
+   */
+  createEffect(
+    () =>
+      mounted() &&
+      props.frozenAt === undefined &&
+      (!props.autoPause || (onscreen() && shown())),
+    (awake) => {
+      if (awake) run()
+      else halt()
+    }
+  )
+
   onSettled(() => {
     rawProps.ref?.({ get svg() { return svg }, seek, renderAt })
     if (props.frozenAt !== undefined) return
     apply(block(), elapsed())
-    raf = requestAnimationFrame(tick)
+
+    const sync = () => setShown(document.visibilityState !== 'hidden')
+    document.addEventListener('visibilitychange', sync)
+    sync()
+
+    /*
+     * `IntersectionObserver` couvre les deux facons de ne pas etre a l'ecran : le
+     * defilement, et un ancetre non rendu — un panneau replie ne « croise » rien.
+     * Absent de l'environnement (happy-dom, vieux moteur), on considere le bot
+     * visible : la bride est une economie, jamais une condition d'affichage.
+     */
+    const spy =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver((entries) => {
+            const latest = entries[entries.length - 1]
+            if (latest) setOnscreen(latest.isIntersecting)
+          })
+    spy?.observe(svg)
+    setMounted(true)
+
+    return () => {
+      document.removeEventListener('visibilitychange', sync)
+      spy?.disconnect()
+    }
   })
 
   onCleanup(() => {
-    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf)
+    halt()
     if (typeof window !== 'undefined') detach()
   })
 
@@ -333,9 +423,19 @@ export default function BloubBot(rawProps: BloubBotProps) {
       : { ...common, cx: dot.x, cy: dot.y, r: dot.r }
   }
 
+  /*
+   * `keyed={false}` et non l'appariement par defaut : le moteur rend un TABLEAU
+   * NEUF a chaque image, donc l'identite d'objet detruisait et recreait les noeuds
+   * SVG a chaque image. Sans clef l'appariement se fait par POSITION : les noeuds
+   * vivent, seuls leurs attributs bougent. Mesure sur deux avatars de 46 px a
+   * 60 Hz : environ 1300 noeuds vivants avant, une quinzaine apres. C'est de
+   * l'allocation et du ramasse-miettes en moins, pas du temps de mise en page :
+   * le cout d'une image dessinee ne change pas, c'est le role de `fps`.
+   * L'ordre du document est le meme, ce dont depend `matricesDesYeux`.
+   */
   const Dots = () => (
-    <For each={frame().dots}>
-      {(dot) => <Dynamic component={dot.d ? 'path' : 'circle'} {...dotAttrs(dot)} />}
+    <For each={frame().dots} keyed={false}>
+      {(dot) => <Dynamic component={dot().d ? 'path' : 'circle'} {...dotAttrs(dot())} />}
     </For>
   )
 
@@ -360,27 +460,27 @@ export default function BloubBot(rawProps: BloubBotProps) {
           height={DEMI_VIEWBOX * 2}
         >
           <path d={frame().bodyPath} fill="#fff" />
-          <For each={frame().eyes}>
-            {(eye) => <path d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill="#000" />}
+          <For each={frame().eyes} keyed={false}>
+            {(eye) => <path d={eye().d} transform={eye().matrix} opacity={eye().alpha} fill="#000" />}
           </For>
           <Show when={frame().notch}>
             {(notch) => <circle cx={notch().x} cy={notch().y} r={notch().r} fill="#000" />}
           </Show>
         </mask>
 
-        <For each={frame().arcs}>
+        <For each={frame().arcs} keyed={false}>
           {(arc) => (
             <linearGradient
-              id={`${uid}-${arc.id}`}
+              id={`${uid}-${arc().id}`}
               gradientUnits="userSpaceOnUse"
-              x1={arc.grad.x1}
-              y1={arc.grad.y1}
-              x2={arc.grad.x2}
-              y2={arc.grad.y2}
+              x1={arc().grad.x1}
+              y1={arc().grad.y1}
+              x2={arc().grad.x2}
+              y2={arc().grad.y2}
             >
-              <For each={arc.grad.stops}>
+              <For each={arc().grad.stops} keyed={false}>
                 {(color, index) => (
-                  <stop offset={index() / (arc.grad.stops.length - 1)} stop-color={color} />
+                  <stop offset={index / (arc().grad.stops.length - 1)} stop-color={color()} />
                 )}
               </For>
             </linearGradient>
@@ -389,13 +489,13 @@ export default function BloubBot(rawProps: BloubBotProps) {
       </defs>
 
       <g fill="none" stroke-linecap="round">
-        <For each={frame().arcs}>
+        <For each={frame().arcs} keyed={false}>
           {(arc) => (
             <path
-              d={arc.back}
-              stroke={`url(#${uid}-${arc.id})`}
-              stroke-width={arc.width}
-              opacity={arc.opacity}
+              d={arc().back}
+              stroke={`url(#${uid}-${arc().id})`}
+              stroke-width={arc().width}
+              opacity={arc().opacity}
             />
           )}
         </For>
@@ -423,13 +523,13 @@ export default function BloubBot(rawProps: BloubBotProps) {
       </Show>
 
       <g fill="none" stroke-linecap="round">
-        <For each={frame().arcs}>
+        <For each={frame().arcs} keyed={false}>
           {(arc) => (
             <path
-              d={arc.front}
-              stroke={`url(#${uid}-${arc.id})`}
-              stroke-width={arc.width}
-              opacity={arc.opacity}
+              d={arc().front}
+              stroke={`url(#${uid}-${arc().id})`}
+              stroke-width={arc().width}
+              opacity={arc().opacity}
             />
           )}
         </For>
