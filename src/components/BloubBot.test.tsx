@@ -2,7 +2,11 @@
 import { render } from '@solidjs/web'
 import { describe, expect, it, vi } from 'vitest'
 import BloubBot, { type BloubBotRef } from './BloubBot'
-import { defaultCycle } from '@/bot/cycles'
+import { blockAt, defaultCycle } from '@/bot/cycles'
+import { BotEngine } from '@/bot/engine'
+import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '@/bot/expressions'
+import { RAYON } from '@/bot/repere'
+import { DEFAULT_SHAPE, SHAPE_BY_ID } from '@/bot/skins'
 
 /**
  * Le composant ne connait du temps que `requestAnimationFrame` : la remplacer
@@ -128,6 +132,35 @@ describe('BloubBot Solid', () => {
     regarde?.([{ isIntersecting: true }])
     await Promise.resolve()
     expect(horloge.tourne).toBe(true)
+
+    dispose()
+    vi.unstubAllGlobals()
+  })
+
+  it('initialPhase fait partir le bot de cette date du montage', async () => {
+    horlogeManuelle()
+    const blocs = defaultCycle().blocks
+    const phase = blocs[0]!.duration + 0.4
+    const { index, elapsed } = blockAt(blocs, phase)
+    const onBlockChange = vi.fn()
+    const host = document.createElement('div')
+    const dispose = render(
+      () => <BloubBot cycle={blocs} playing initialPhase={phase} onBlockChange={onBlockChange} />,
+      host
+    )
+    await Promise.resolve()
+
+    // Le moteur de reference : l'etat du bloc, commence `elapsed` secondes avant la date.
+    const reference = new BotEngine(
+      RAYON,
+      blocs[index]!.state,
+      SHAPE_BY_ID.get(DEFAULT_SHAPE)!.radii,
+      EXPRESSION_BY_ID.get(DEFAULT_EXPRESSION)!
+    )
+    reference.reset(blocs[index]!.state, phase - elapsed)
+    expect(index).toBeGreaterThan(0)
+    expect(host.querySelector('mask path')?.getAttribute('d')).toBe(reference.sample(phase).bodyPath)
+    expect(onBlockChange).not.toHaveBeenCalled()
 
     dispose()
     vi.unstubAllGlobals()

@@ -5,6 +5,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-26
+
+### Added
+
+- `initialPhase`, the time of the cycle where the bot starts, in seconds. The
+  component reads it once, on mount: the clock, the block and the pose start at
+  that time. Bots mounted together with different values do not animate in step.
+  A frozen bot (`frozenAt`) ignores it.
+- `BotEngine.setState` takes an optional `posePhase`. It moves the pose of the new
+  state forward on its own clock, and keeps the transition timing. With `0`, the
+  default, the output does not change.
+
 ## [0.3.0] — 2026-09-04
 
 ### Added
