@@ -138,6 +138,12 @@ export class BotEngine {
   private departFige: Pose | null = null
   private tCur = 0
   private tPrev = 0
+  /**
+   * Avance de la POSE de l'etat courant (et de l'etat quitte) sur son horloge : la pose se
+   * lit a `now - tCur + posePhase`, le fondu reste date sur `tCur`. Cf. `setState`.
+   */
+  private posePhase = 0
+  private previousPosePhase = 0
   private blinkAt = -10
   private pts: Point[] = []
   private shape: number[] | null = null
@@ -355,6 +361,8 @@ export class BotEngine {
     this.departFige = null
     this.tCur = now
     this.tPrev = now
+    this.posePhase = 0
+    this.previousPosePhase = 0
     this.blinkAt = -10
   }
 
@@ -370,7 +378,7 @@ export class BotEngine {
     if (this.departFige) return this.departFige
     if (!this.prev) return null
     const prevDef = STATE_BY_ID.get(this.prev)!
-    return this.posed(prevDef, Math.max(0, now - this.tPrev), shape, expr)
+    return this.posed(prevDef, Math.max(0, now - this.tPrev + this.previousPosePhase), shape, expr)
   }
 
   /**
@@ -382,7 +390,7 @@ export class BotEngine {
     const def = STATE_BY_ID.get(this.cur)!
     const shape = this.shapeAtTime(now)
     const expr = this.exprAtTime(now)
-    const pose = this.posed(def, Math.max(0, now - this.tCur), shape, expr)
+    const pose = this.posed(def, Math.max(0, now - this.tCur + this.posePhase), shape, expr)
     const since = now - this.tCur
     if (since >= def.morph) return pose
     const origine = this.origine(now, shape, expr)
@@ -407,14 +415,21 @@ export class BotEngine {
    * exactement l'image affichee. La lecture d'un montage, dont les blocs durent au moins
    * le plus long fondu (`MIN_BLOCK`), ne fige donc jamais rien et rend au bit ce qu'elle
    * rendait.
+   *
+   * `posePhase` avance la pose du nouvel etat sans toucher au fondu : un bot qui entre dans
+   * un etat au milieu de son animation (cf. `initialPhase` du composant) morphe depuis
+   * l'image a l'ecran, sur la duree normale, vers une pose deja en cours. A 0 — la valeur
+   * par defaut — le rendu est celui d'avant, au bit pres.
    */
-  setState(id: StateId, now: number) {
+  setState(id: StateId, now: number, posePhase = 0) {
     if (id === this.cur) return
     const morph = STATE_BY_ID.get(this.cur)!.morph
     const enPleinFondu = this.prev !== null && now - this.tCur < morph
     this.departFige = enPleinFondu ? this.poseComposee(now) : null
     this.prev = this.cur
     this.tPrev = this.tCur
+    this.previousPosePhase = this.posePhase
+    this.posePhase = posePhase
     this.cur = id
     this.tCur = now
     // Dans la video, chaque changement de forme est masque par un clignement.
@@ -426,7 +441,7 @@ export class BotEngine {
     const def = STATE_BY_ID.get(this.cur)!
     const shape = this.shapeAtTime(now)
     const expr = this.exprAtTime(now)
-    let pose = this.posed(def, Math.max(0, now - this.tCur), shape, expr)
+    let pose = this.posed(def, Math.max(0, now - this.tCur + this.posePhase), shape, expr)
     let decalage = this.decalageAtTime(now, this.cur)
 
     // --- transition -------------------------------------------------------

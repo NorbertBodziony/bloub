@@ -70,6 +70,12 @@ export interface BloubBotProps {
    * `renderAt` (l'export, lui, passe par `frozenAt` et n'a jamais de boucle).
    */
   autoPause?: boolean
+  /**
+   * Date de depart du bot dans son montage, en secondes. Lue une fois, au montage :
+   * l'horloge, le bloc et la pose partent de cette date, donc plusieurs bots montes
+   * ensemble ne respirent pas a l'unisson. Ignoree par un bot fige (`frozenAt`).
+   */
+  initialPhase?: number
   onBlockChange?: (value: number) => void
   onStateChange?: (value: StateId) => void
   onPlayingChange?: (value: boolean) => void
@@ -96,10 +102,22 @@ export default function BloubBot(rawProps: BloubBotProps) {
     rawProps
   )
 
-  const [internalBlock, setInternalBlock] = createSignal(0)
-  const [internalState, setInternalState] = createSignal<StateId>('idle')
+  /*
+   * Le depart, lu une seule fois : c'est une date, pas un reglage suivi. Tout est lu sous
+   * `untrack`, sinon le corps du composant lirait des props hors de toute portee reactive.
+   */
+  const start = untrack(() => {
+    const phased = props.initialPhase !== undefined && props.frozenAt === undefined
+    const phase = phased ? props.initialPhase! : 0
+    const position = phased ? blockAt(props.cycle, phase) : { index: 0, elapsed: 0 }
+    const state: StateId = phased ? (props.cycle[position.index]?.state ?? 'idle') : 'idle'
+    return { phased, phase, ...position, state }
+  })
+
+  const [internalBlock, setInternalBlock] = createSignal(start.index)
+  const [internalState, setInternalState] = createSignal<StateId>(start.state)
   const [internalPlaying] = createSignal(false)
-  const [internalElapsed, setInternalElapsed] = createSignal(0)
+  const [internalElapsed, setInternalElapsed] = createSignal(start.elapsed)
 
   const block = () => rawProps.block ?? internalBlock()
   const state = () => rawProps.state ?? internalState()
@@ -125,8 +143,13 @@ export default function BloubBot(rawProps: BloubBotProps) {
   const ink = createMemo(() => COLOR_BY_ID.get(props.color)?.hex ?? '#0a0a0c')
   const expression = createMemo(() => EXPRESSION_BY_ID.get(props.expression) ?? null)
 
-  const engine = untrack(() => new BotEngine(RAYON, state(), shapeRadii(), expression()))
-  const [frame, setFrame] = createSignal<BotFrame>(untrack(() => engine.sample(props.frozenAt ?? 0)), {
+  const engine = untrack(() => {
+    const created = new BotEngine(RAYON, state(), shapeRadii(), expression())
+    // l'etat du bloc de depart a commence `elapsed` secondes avant la date de depart
+    if (start.phased) created.reset(state(), start.phase - start.elapsed)
+    return created
+  })
+  const [frame, setFrame] = createSignal<BotFrame>(untrack(() => engine.sample(props.frozenAt ?? start.phase)), {
     equals: false
   })
   const uid = createUniqueId()
@@ -138,12 +161,12 @@ export default function BloubBot(rawProps: BloubBotProps) {
   let drawn = -Infinity
   let nextAt = Infinity
   let last = 0
-  let clock = 0
+  let clock = start.phase
   let blockStart = 0
   let pendingOffset = 0
   let lastRenderedBlock = -1
 
-  function apply(index: number, from = 0) {
+  function apply(index: number, from = 0, posePhase = 0) {
     const current = props.cycle[index]
     if (!current) {
       nextAt = Infinity
@@ -152,7 +175,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
     blockStart = clock - from
     setElapsed(from)
     setState(current.state)
-    engine.setState(current.state, clock)
+    engine.setState(current.state, clock, posePhase)
     nextAt = playing() ? blockStart + current.duration : Infinity
   }
 
@@ -307,7 +330,15 @@ export default function BloubBot(rawProps: BloubBotProps) {
         }
         const index = Math.min(block(), blocks.length - 1)
         if (index !== block()) goToBlock(index)
-        else nextAt = playing() ? blockStart + blocks[index]!.duration : Infinity
+        else if (blocks[index]!.state !== engine.state) {
+          /*
+           * Meme bloc, autre etat : le montage a change sous le bot (un avatar qui passe de
+           * `idle` a `think`, par exemple). Le bloc repart decale de la date de depart, pour
+           * que des bots montes ensemble restent desynchronises apres le changement.
+           */
+          const offset = start.phase % blocks[index]!.duration
+          apply(index, offset, offset)
+        } else nextAt = playing() ? blockStart + blocks[index]!.duration : Infinity
       },
       { defer: true }
   )
