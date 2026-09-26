@@ -5,7 +5,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.0] — 2026-09-26
+## [0.4.1] — 2026-09-26
+
+The `v0.4.0` tag was not published: its release check failed with npm 12. 0.4.1
+has the same changes, listed below.
+
+### Fixed
+
+- The package tarball check reads the `npm pack --json` output of npm 11 (an
+  array) and of npm 12 (an object keyed by package name).
+
+## [0.4.0] — 2026-09-26 (not published)
 
 ### Added
 
