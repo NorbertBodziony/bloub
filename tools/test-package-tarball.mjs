@@ -16,12 +16,15 @@ function run(command, args, cwd) {
 }
 
 try {
-  const packed = JSON.parse(
+  const output = JSON.parse(
     execFileSync('npm', ['pack', ...(packageSpec ? [packageSpec] : []), '--json', '--pack-destination', temporary], {
       cwd: root,
       encoding: 'utf8'
     })
-  )[0]
+  )
+  // npm 11 rend un tableau, npm 12 un objet indexe par nom de paquet.
+  const packed = Array.isArray(output) ? output[0] : Object.values(output)[0]
+  if (!packed?.files) throw new Error(`Unexpected npm pack output: ${JSON.stringify(output).slice(0, 200)}`)
   const packedPaths = packed.files.map((file) => file.path)
   const forbidden = packedPaths.filter(
     (path) => path.endsWith('.map') || path.startsWith('src/') || path.includes('mediabunny')
