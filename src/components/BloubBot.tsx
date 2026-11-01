@@ -20,6 +20,8 @@ import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '
 import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles.js'
 import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
 import { STATE_BY_ID, type StateId } from '../bot/states.js'
+import { FeltDefs, FeltPattern, feltTexture, type FiltreFeutre, type Material } from './felt.js'
+import { feltGl } from './feltgl.js'
 
 function watch<T>(
   source: Accessor<T>,
@@ -76,6 +78,11 @@ export interface BloubBotProps {
    * ensemble ne respirent pas a l'unisson. Ignoree par un bot fige (`frozenAt`).
    */
   initialPhase?: number
+  /**
+   * Matiere du corps. `flat` (defaut) est le rendu d'origine, sans filtre. Les deux
+   * autres sont un essai de feutrine (`felt.tsx`) : pur rendu, le moteur les ignore.
+   */
+  material?: Material
   onBlockChange?: (value: number) => void
   onStateChange?: (value: StateId) => void
   onPlayingChange?: (value: boolean) => void
@@ -97,6 +104,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
       follow: false,
       gaze: null,
       autoPause: true,
+      material: 'flat' as Material,
       ariaLabel: 'Animated Bloub avatar'
     },
     rawProps
@@ -140,7 +148,10 @@ export default function BloubBot(rawProps: BloubBotProps) {
   }
 
   const shapeRadii = createMemo(() => SHAPE_BY_ID.get(props.shape)?.radii ?? null)
-  const ink = createMemo(() => COLOR_BY_ID.get(props.color)?.hex ?? '#0a0a0c')
+  // un id du personnalisateur, ou une couleur `#rrggbb` donnee telle quelle
+  const ink = createMemo(
+    () => COLOR_BY_ID.get(props.color)?.hex ?? (/^#[0-9a-f]{6}$/i.test(props.color) ? props.color : '#0a0a0c')
+  )
   const expression = createMemo(() => EXPRESSION_BY_ID.get(props.expression) ?? null)
 
   const engine = untrack(() => {
@@ -154,6 +165,34 @@ export default function BloubBot(rawProps: BloubBotProps) {
   })
   const uid = createUniqueId()
   const maskId = `bot-mask-${uid}`
+  const feltId = `bot-felt-${uid}`
+  const fibresId = `bot-fibres-${uid}`
+  const textured = () => props.material === 'felt-texture' && feltTexture() !== ''
+  const filtre = (): FiltreFeutre | null =>
+    props.material === 'felt' || props.material === 'felt-texture' ? props.material : null
+  /*
+   * `felt-gl` : le corps n'est plus dans le SVG mais dans un canvas, sous un
+   * `foreignObject` a la meme place dans l'empilement. Le canvas est cree a la main
+   * plutot qu'en JSX : sous un <svg>, le compilateur le fabriquerait en SVG.
+   */
+  const gl = () => props.material === 'felt-gl'
+  let feutre: HTMLCanvasElement | undefined
+  function poseFeutre(hote: SVGForeignObjectElement) {
+    feutre = document.createElement('canvas')
+    feutre.style.cssText = `display:block;width:${DEMI_VIEWBOX * 2}px;height:${DEMI_VIEWBOX * 2}px`
+    hote.appendChild(feutre)
+    dessineFeutre()
+  }
+  function dessineFeutre() {
+    const rendu = gl() && feutre ? feltGl() : null
+    if (!rendu || !feutre) return
+    const cote = Math.max(1, Math.round(props.size * (window.devicePixelRatio || 1)))
+    if (feutre.width !== cote) {
+      feutre.width = cote
+      feutre.height = cote
+    }
+    rendu.draw(feutre, frame(), ink(), props.paper)
+  }
 
   let svg!: SVGSVGElement
   let raf = 0
@@ -355,6 +394,8 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
   watch(() => props.frozenAt, redrawFrozen, { defer: true })
 
+  watch(() => [frame(), ink(), props.paper, props.size, gl()], dessineFeutre, { defer: true })
+
   createEffect(
     () => props.follow && props.frozenAt === undefined,
     (following) => {
@@ -517,6 +558,13 @@ export default function BloubBot(rawProps: BloubBotProps) {
             </linearGradient>
           )}
         </For>
+
+        <Show when={filtre()}>
+          {(kind) => <FeltDefs id={feltId} size={props.size} kind={kind()} />}
+        </Show>
+        <Show when={textured()}>
+          <FeltPattern id={fibresId} size={props.size} href={feltTexture()} />
+        </Show>
       </defs>
 
       <g fill="none" stroke-linecap="round">
@@ -534,7 +582,21 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
       <Show when={frame().dotsBehind}><g><Dots /></g></Show>
 
-      <g opacity={frame().bodyAlpha}>
+      <Show when={gl()}>
+        <foreignObject
+          ref={poseFeutre}
+          x={-DEMI_VIEWBOX}
+          y={-DEMI_VIEWBOX}
+          width={DEMI_VIEWBOX * 2}
+          height={DEMI_VIEWBOX * 2}
+        />
+      </Show>
+
+      <g
+        opacity={frame().bodyAlpha}
+        filter={filtre() ? `url(#${feltId})` : undefined}
+        display={gl() ? 'none' : undefined}
+      >
         <path d={frame().bodyPath} fill={props.paper} />
         <g mask={`url(#${maskId})`}>
           <rect
@@ -544,6 +606,15 @@ export default function BloubBot(rawProps: BloubBotProps) {
             height={DEMI_VIEWBOX * 2}
             fill={ink()}
           />
+          <Show when={textured()}>
+            <rect
+              x={-DEMI_VIEWBOX}
+              y={-DEMI_VIEWBOX}
+              width={DEMI_VIEWBOX * 2}
+              height={DEMI_VIEWBOX * 2}
+              fill={`url(#${fibresId})`}
+            />
+          </Show>
         </g>
       </g>
 
