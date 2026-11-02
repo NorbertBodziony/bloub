@@ -37,9 +37,32 @@ try {
     'package.json',
     'dist/package/index.js',
     'dist/package/server.js',
-    'dist/package/types/index.d.ts'
+    'dist/package/types/index.d.ts',
+    'dist/package/plush.js',
+    'dist/package/plush-server.js',
+    'dist/package/types/plush/index.d.ts',
+    'dist/package/assets/boule.webp'
   ]) {
     if (!packedPaths.includes(required)) throw new Error(`Missing package file: ${required}`)
+  }
+
+  // chaque image que `plush.js` reference est dans l'archive : une URL sans fichier est un 404
+  const plushCode = readFileSync(join(root, 'dist/package/plush.js'), 'utf8')
+  const referenced = [...plushCode.matchAll(/new URL\("\.\/(assets\/[^"]+)"/g)].map((m) => `dist/package/${m[1]}`)
+  if (referenced.length < 12) throw new Error(`plush.js references only ${referenced.length} images`)
+  const unpacked = referenced.filter((path) => !packedPaths.includes(path))
+  if (unpacked.length) throw new Error(`Images referenced but not packed: ${unpacked.join(', ')}`)
+  if (/data:image/.test(plushCode)) throw new Error('plush.js inlines an image')
+
+  // l'entree principale n'emmene pas la peluche : ni ses images, ni son code
+  const mainFiles = ['dist/package/index.js', 'dist/package/server.js']
+  for (const file of mainFiles) {
+    const code = readFileSync(join(root, file), 'utf8')
+    const imports = [...code.matchAll(/from ?"(\.\/[^"]+)"/g)].map((m) => join(dirname(file), m[1]))
+    for (const path of [file, ...imports]) {
+      const text = readFileSync(join(root, path), 'utf8')
+      if (/\.webp|PlushBot|plush/i.test(text)) throw new Error(`${path} pulls plush code into the main entry`)
+    }
   }
 
   const consumer = join(temporary, 'consumer')
@@ -132,6 +155,39 @@ export const controller = () => bot
   if (browserBytes > 40_000) {
     throw new Error(`Consumer JavaScript is too large: ${browserBytes} gzip bytes`)
   }
+
+  /*
+   * La peluche dans un vrai projet : le bundler du consommateur doit emettre les images
+   * que le bot affiche, puisque le paquet ne les incruste pas.
+   */
+  writeFileSync(
+    join(source, 'main.tsx'),
+    `import { render } from '@solidjs/web'
+import { PlushBot } from '@norbert_bodziony/bloub/plush'
+
+render(
+  () => <PlushBot character="nexo" state="thinking" />,
+  document.getElementById('app')!
+)
+`
+  )
+  run('bunx', ['tsc', '--noEmit'], consumer)
+  run('bunx', ['vite', 'build', '--outDir', 'dist-plush'], consumer)
+  const plushAssets = readdirSync(join(consumer, 'dist-plush', 'assets'))
+  for (const image of ['nexo-corps', 'nexo-oeil0', 'boule']) {
+    if (!plushAssets.some((name) => name.startsWith(image) && name.endsWith('.webp'))) {
+      throw new Error(`The consumer build did not emit ${image}.webp`)
+    }
+  }
+  run(
+    'node',
+    [
+      '--input-type=module',
+      '--eval',
+      "import { PlushBot, PLUSH_CHARACTERS } from '@norbert_bodziony/bloub/plush'; if (typeof PlushBot !== 'function' || PLUSH_CHARACTERS.length !== 6) process.exit(1)"
+    ],
+    consumer
+  )
 
   console.log(
     `bloub tarball with solid-js@${solidVersion}: ${packed.size} bytes, ${packed.entryCount} files; consumer JS: ${browserBytes} gzip bytes`

@@ -23,6 +23,22 @@ the displayed frame. Montage playback, whose blocks last at least the longest fa
 freezes anything and renders byte for byte what it did before: verified over 1921 frames
 of the default cycle, the 15-state board, and a re-read of an arbitrary date.
 
+**The same defect existed twice more, and has the same fix.** The plush bot
+(`src/plush/`) changes state and face at any time, which a montage never does, and it
+found them:
+
+- *An expression changed mid-morph* restarted from the previous **target**, not the
+  blended face on screen: 18 to 20 px. `setExpression` now freezes the blended face, and
+  keeps the boundary ids it came from with their weights (`exprDepart`), because the eye
+  offset below is read from a table by id and a blended face has no id.
+- *The eye offset of a customiser shape* (`eyefit.ts`) blends beside the pose, and
+  restarted from the **full** offset of the state being left: 7.3 px on `capsule` for
+  `notify -> idle -> notify` 50 ms apart. `setState` now freezes the composite offset
+  (`decalageFige`) under exactly the same condition as the pose.
+
+Both freeze only when a morph is in progress, so spaced changes stay byte-identical, and
+`engine.test.ts` locks both halves of each.
+
 **`sample()` must not mutate either.** Purging a "stale" previous state during
 playback looks like an innocent optimisation and makes the engine non-replayable:
 re-reading a date from before the end of a fade would no longer find it. This

@@ -8,5 +8,5 @@
     "rootDir": "src",
     "outDir": "dist/package/types"
   },
-  "include": ["src/index.ts"]
+  "include": ["src/index.ts", "src/plush/index.ts"]
 }

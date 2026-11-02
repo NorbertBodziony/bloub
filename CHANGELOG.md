@@ -5,6 +5,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `@norbert_bodziony/bloub/plush`: `PlushBot`, a felt plush bot with a still body and
+  moving eyes. Six baked characters, and 11 grey shapes tinted at runtime to any colour.
+  States `idle`, `wink`, `wide`, `thinking` and `notify`, with the 16 rest expressions.
+  The images ship as separate files, referenced so that a consumer's bundler emits them.
+- Three customiser shapes: `carre`, `losange` and `pentagone`.
+- `BloubBot` takes a `layer` render slot in place of the flat body and eyes, and
+  `expression` accepts a full `BotExpression` as well as a catalogue id.
+
+### Fixed
+
+- An expression change during an expression morph blends from the face on screen. It
+  restarted from the previous target and the eyes jumped up to 20 px.
+- On a customiser shape, a state change during a fade blends the eye offset from its
+  value on screen. It restarted from the full offset of the state being left, a jump of
+  up to 7 px.
+
 ## [0.4.1] — 2026-09-26
 
 The `v0.4.0` tag was not published: its release check failed with npm 12. 0.4.1

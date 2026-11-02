@@ -1,76 +1,68 @@
-import { For, createSignal } from 'solid-js'
-import BloubBot from '@/components/BloubBot'
-import type { Material } from '@/components/felt'
-import { makeBlock } from '@/bot/cycles'
-import { EXPRESSIONS, EXPRESSION_BY_ID, type BotExpression, type ExpressionId } from '@/bot/expressions'
-import type { ColorId, ShapeId } from '@/bot/skins'
-import type { EyeCfg, StateId } from '@/bot/states'
-import type { GazeScript } from '@/ui/gaze'
+import { For, createSignal, onCleanup } from 'solid-js'
+import { EXPRESSIONS, type ExpressionId } from '@/bot/expressions'
+import { COLORS } from '@/bot/skins'
+import { PLUSH_CHARACTERS, PLUSH_SHAPES, PLUSH_STATES, PlushBot, type PlushState } from '@/plush'
 
-const oeil = (w: number, h: number, tilt = 0): EyeCfg => ({ w, h, tilt, open: 1 })
-
-/**
- * Les six avatars des captures de reference. `encre` est la couleur relevee sur la
- * capture de l'app (mediane du haut du corps, hors yeux). Les yeux aussi y sont
- * releves, rapportes au rayon du corps : taille (`w`, `h`), demi-ecart en degres sur
- * la sphere (`split`), et ou le visage se pose (`yaw`, `pitch`). Yoshi et Fred sont
- * encore plats dans l'app : leur encre est celle de leur aplat.
- */
-const BOTS: {
-  nom: string
-  shape: ShapeId
-  color: ColorId
-  encre: string
-  split: number
-  yeux: [EyeCfg, EyeCfg]
-  yaw: number
-  pitch: number
-}[] = [
-  { nom: 'Nexo', shape: 'squircle', color: 'orange', encre: '#e45206', split: 19, yeux: [oeil(0.24, 0.6, -28), oeil(0.24, 0.6, 28)], yaw: 0, pitch: -6 },
-  { nom: 'Vita', shape: 'hexagone', color: 'vert', encre: '#22c377', split: 15, yeux: [oeil(0.2, 0.48), oeil(0.44, 0.14)], yaw: 0, pitch: 0 },
-  { nom: 'Cloe', shape: 'triangle', color: 'rose', encre: '#df2986', split: 17, yeux: [oeil(0.32, 0.12, 30), oeil(0.32, 0.12, -30)], yaw: 0, pitch: -2 },
-  { nom: 'Malu', shape: 'cercle', color: 'violet', encre: '#9a55ef', split: 18, yeux: [oeil(0.18, 0.42), oeil(0.18, 0.18)], yaw: 7, pitch: 7 },
-  { nom: 'Yoshi', shape: 'capsule', color: 'rouge', encre: '#e94741', split: 16, yeux: [oeil(0.3, 0.12), oeil(0.3, 0.12)], yaw: 0, pitch: 0 },
-  { nom: 'Fred', shape: 'hexagone', color: 'ambre', encre: '#efb428', split: 16, yeux: [oeil(0.36, 0.36), oeil(0.36, 0.36)], yaw: 0, pitch: 0 }
-]
+/** le visage propre au bot : celui du personnage, `neutre` pour une forme */
+const PROPRE = 'propre'
+const TAILLES = [46, 96, 200]
 
 /*
- * Bricolage du bac a sable : chaque visage est inscrit dans la table des expressions
- * sous un id a lui, pour que le composant le trouve. Le catalogue (et ses libelles)
- * n'en sait rien. Le garder si l'essai aboutit voudrait de vraies entrees.
+ * Le parcours : une suite d'etats et de visages, pour regarder les transitions sans
+ * toucher aux menus. Changements rapproches (0,25 s) compris, pour voir les fondus
+ * interrompus.
  */
-const visage = (nom: string) => `peluche-${nom.toLowerCase()}`
-for (const bot of BOTS) {
-  const expression: BotExpression = {
-    id: visage(bot.nom) as ExpressionId,
-    gaze: { yaw: bot.yaw, pitch: bot.pitch, roll: 0 },
-    split: bot.split,
-    eyes: bot.yeux
-  }
-  EXPRESSION_BY_ID.set(expression.id, expression)
-}
-
-/** Le visage pose ou il est sur la capture, avec un peu de derive pour rester vivant. */
-const regard = (bot: { yaw: number; pitch: number }): GazeScript => () => ({
-  yaw: bot.yaw,
-  pitch: bot.pitch,
-  mix: 1,
-  spin: 0,
-  wander: 0.4
-})
-const REFERENCE = 'reference'
-
-const MATIERES: Material[] = ['flat', 'felt', 'felt-texture', 'felt-gl']
-const TAILLES = [46, 96, 200]
-const ETATS: StateId[] = ['idle', 'wink', 'thinking', 'orbit']
-const CREME = '#f1efe9'
+const PARCOURS: [PlushState, string, number][] = [
+  ['idle', PROPRE, 1.6],
+  ['wink', PROPRE, 1.2],
+  ['idle', 'heureux', 1.4],
+  ['wide', 'heureux', 1.2],
+  ['idle', 'triste', 0.25],
+  ['idle', 'surpris', 1.4],
+  ['thinking', 'surpris', 2.4],
+  ['notify', PROPRE, 1.8],
+  ['thinking', PROPRE, 0.25],
+  ['idle', PROPRE, 1.6]
+]
 
 export default function Sandbox() {
   const params = new URLSearchParams(location.hash.slice(1))
   const [taille, setTaille] = createSignal(Number(params.get('taille')) || 96)
-  const [etat, setEtat] = createSignal<StateId>((params.get('etat') as StateId | null) ?? 'idle')
-  const [expression, setExpression] = createSignal(params.get('expression') ?? REFERENCE)
+  const [etat, setEtat] = createSignal<PlushState>((params.get('etat') as PlushState | null) ?? 'idle')
+  const [expression, setExpression] = createSignal(params.get('expression') ?? PROPRE)
+  const [couleur, setCouleur] = createSignal(params.get('couleur') ?? 'bleu')
   const [fige, setFige] = createSignal(params.has('fige'))
+  // Instant fige : `#fige&t=2.5`, ou pas a pas depuis l'outil d'enregistrement (`__instant`)
+  const [instant, setInstant] = createSignal(Number(params.get('t')) || 1)
+  const fenetre = window as unknown as { __instant: (t: number) => void; __etat: (s: PlushState, e?: string) => void }
+  fenetre.__instant = setInstant
+  fenetre.__etat = (s, e) => {
+    setEtat(s)
+    if (e) setExpression(e)
+  }
+  /*
+   * Un appel, pas un ternaire dans le JSX : Solid enveloppe un ternaire de prop dans un
+   * memo cree a la lecture, et BloubBot lit `frozenAt` depuis un effet ou c'est interdit.
+   */
+  const figeA = () => (fige() ? instant() : undefined)
+  const visage = () => (expression() === PROPRE ? undefined : (expression() as ExpressionId))
+
+  const [parcours, setParcours] = createSignal(params.has('parcours'))
+  let minuterie: ReturnType<typeof setTimeout> | undefined
+  const etape = (i: number) => {
+    if (!parcours()) return
+    const [s, e, duree] = PARCOURS[i % PARCOURS.length]!
+    setEtat(s)
+    setExpression(e)
+    minuterie = setTimeout(() => etape(i + 1), duree * 1000)
+  }
+  const basculeParcours = (on: boolean) => {
+    clearTimeout(minuterie)
+    setParcours(on)
+    if (on) etape(0)
+  }
+  if (parcours()) etape(0)
+  onCleanup(() => clearTimeout(minuterie))
 
   const choix = (label: string, valeurs: readonly (string | number)[], actuelle: () => string | number, pose: (v: string) => void) => (
     <label style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
@@ -80,51 +72,75 @@ export default function Sandbox() {
       </select>
     </label>
   )
+  const case_ = (label: string, actuelle: () => boolean, pose: (v: boolean) => void) => (
+    <label style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
+      <input type="checkbox" checked={actuelle()} onChange={(e) => pose(e.currentTarget.checked)} />
+      {label}
+    </label>
+  )
+  const grille = () => ({
+    display: 'grid',
+    'grid-template-columns': `repeat(auto-fill, ${Math.max(taille(), 60) + 24}px)`,
+    gap: '12px',
+    'align-items': 'end',
+    'margin-bottom': '32px'
+  })
+  const legende = { color: '#8e8e93', 'font-size': '12px', 'text-align': 'center' } as const
 
   return (
     <main style={{ padding: '24px' }}>
       <div style={{ display: 'flex', gap: '20px', 'flex-wrap': 'wrap', 'margin-bottom': '24px' }}>
         {choix('taille', TAILLES, taille, (v) => setTaille(Number(v)))}
-        {choix('etat', ETATS, etat, (v) => setEtat(v as StateId))}
-        {choix('expression', [REFERENCE, ...EXPRESSIONS.map((e) => e.id)], expression, setExpression)}
+        {choix('etat', PLUSH_STATES, etat, (v) => setEtat(v as PlushState))}
+        {choix('expression', [PROPRE, ...EXPRESSIONS.map((e) => e.id)], expression, setExpression)}
         <label style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
-          <input type="checkbox" checked={fige()} onChange={(e) => setFige(e.currentTarget.checked)} />
-          figer
+          couleur
+          <select value={couleur()} onChange={(e) => setCouleur(e.currentTarget.value)}>
+            <For each={COLORS}>{(c) => <option value={c.id}>{c.id}</option>}</For>
+          </select>
+          <input
+            type="color"
+            value={COLORS.find((c) => c.id === couleur())?.hex ?? couleur()}
+            onInput={(e) => setCouleur(e.currentTarget.value)}
+          />
         </label>
+        {case_('parcours', parcours, basculeParcours)}
+        {case_('figer', fige, setFige)}
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          'grid-template-columns': `80px repeat(${MATIERES.length}, ${Math.max(taille(), 60) + 24}px)`,
-          gap: '12px',
-          'align-items': 'center'
-        }}
-      >
-        <span />
-        <For each={MATIERES}>{(m) => <span style={{ color: '#8e8e93' }}>{m}</span>}</For>
-        <For each={BOTS}>
-          {(bot, i) => (
-            <>
-              <span>{bot.nom}</span>
-              <For each={MATIERES}>
-                {(m) => (
-                  <BloubBot
-                    size={taille()}
-                    shape={bot.shape}
-                    color={expression() === REFERENCE ? bot.encre : bot.color}
-                    paper={CREME}
-                    expression={expression() === REFERENCE ? visage(bot.nom) : expression()}
-                    gaze={expression() === REFERENCE ? regard(bot) : null}
-                    state={etat()}
-                    cycle={[makeBlock(etat())]}
-                    material={m}
-                    initialPhase={i() * 0.73}
-                    frozenAt={fige() ? 1 : undefined}
-                  />
-                )}
-              </For>
-            </>
+      <div style={grille()}>
+        <For each={PLUSH_CHARACTERS}>
+          {(c, i) => (
+            <figure style={{ margin: 0 }}>
+              <PlushBot
+                character={c.id}
+                size={taille()}
+                state={etat()}
+                expression={visage()}
+                initialPhase={i() * 0.73}
+                frozenAt={figeA()}
+              />
+              <figcaption style={legende}>{c.id}</figcaption>
+            </figure>
+          )}
+        </For>
+      </div>
+
+      <div style={grille()}>
+        <For each={PLUSH_SHAPES}>
+          {(forme, i) => (
+            <figure style={{ margin: 0 }}>
+              <PlushBot
+                shape={forme}
+                color={couleur()}
+                size={taille()}
+                state={etat()}
+                expression={visage()}
+                initialPhase={i() * 0.61}
+                frozenAt={figeA()}
+              />
+              <figcaption style={legende}>{forme}</figcaption>
+            </figure>
           )}
         </For>
       </div>

@@ -15,13 +15,11 @@ import { NOTIF_BLUE } from '../bot/decor.js'
 import { BotEngine, type BotFrame } from '../bot/engine.js'
 import { clamp, easings } from '../bot/math.js'
 import { lookTarget, TURN_TIME, type GazeScript } from '../ui/gaze.js'
-import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '../bot/expressions.js'
+import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID, type BotExpression } from '../bot/expressions.js'
 import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '../bot/skins.js'
 import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles.js'
 import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
 import { STATE_BY_ID, type StateId } from '../bot/states.js'
-import { FeltDefs, FeltPattern, feltTexture, type FiltreFeutre, type Material } from './felt.js'
-import { feltGl } from './feltgl.js'
 
 function watch<T>(
   source: Accessor<T>,
@@ -41,11 +39,29 @@ export interface BloubBotRef {
   renderAt(seconds: number): void
 }
 
+/**
+ * Ce que le composant passe a un rendu de remplacement du corps (`layer`).
+ *
+ * `frame` est l'image courante du moteur ; `time` l'instant ou elle a ete echantillonnee,
+ * et `clock` l'horloge du bot MAINTENANT — c'est sur elle que le composant date ses
+ * changements d'etat (`engine.setState(id, clock)`), donc un rendu qui date les siens
+ * pareil reste dans le meme temps que le moteur, fige ou pas.
+ */
+export interface BotLayerContext {
+  frame: Accessor<BotFrame>
+  time: () => number
+  clock: () => number
+  ink: Accessor<string>
+  uid: string
+}
+
 export interface BloubBotProps {
   size?: number
   shape?: string
+  /** un id du personnalisateur, ou une couleur `#rrggbb` donnee telle quelle */
   color?: string
-  expression?: string
+  /** un id du catalogue, ou une expression complete (un visage qui n'est pas au catalogue) */
+  expression?: string | BotExpression
   paper?: string
   ariaLabel?: string
   frozenAt?: number
@@ -79,10 +95,11 @@ export interface BloubBotProps {
    */
   initialPhase?: number
   /**
-   * Matiere du corps. `flat` (defaut) est le rendu d'origine, sans filtre. Les deux
-   * autres sont un essai de feutrine (`felt.tsx`) : pur rendu, le moteur les ignore.
+   * Rendu de remplacement du corps, des points et de la pastille : le moteur tourne
+   * pareil, seul le dessin change. C'est ce que `@norbert_bodziony/bloub/plush` branche
+   * ici ; le code du rendu reste dans son entree, hors du bundle principal.
    */
-  material?: Material
+  layer?: (context: BotLayerContext) => JSX.Element
   onBlockChange?: (value: number) => void
   onStateChange?: (value: StateId) => void
   onPlayingChange?: (value: boolean) => void
@@ -104,7 +121,6 @@ export default function BloubBot(rawProps: BloubBotProps) {
       follow: false,
       gaze: null,
       autoPause: true,
-      material: 'flat' as Material,
       ariaLabel: 'Animated Bloub avatar'
     },
     rawProps
@@ -148,11 +164,13 @@ export default function BloubBot(rawProps: BloubBotProps) {
   }
 
   const shapeRadii = createMemo(() => SHAPE_BY_ID.get(props.shape)?.radii ?? null)
-  // un id du personnalisateur, ou une couleur `#rrggbb` donnee telle quelle
   const ink = createMemo(
     () => COLOR_BY_ID.get(props.color)?.hex ?? (/^#[0-9a-f]{6}$/i.test(props.color) ? props.color : '#0a0a0c')
   )
-  const expression = createMemo(() => EXPRESSION_BY_ID.get(props.expression) ?? null)
+  const expression = createMemo(() => {
+    const value = props.expression
+    return typeof value === 'string' ? (EXPRESSION_BY_ID.get(value) ?? null) : (value ?? null)
+  })
 
   const engine = untrack(() => {
     const created = new BotEngine(RAYON, state(), shapeRadii(), expression())
@@ -160,39 +178,17 @@ export default function BloubBot(rawProps: BloubBotProps) {
     if (start.phased) created.reset(state(), start.phase - start.elapsed)
     return created
   })
-  const [frame, setFrame] = createSignal<BotFrame>(untrack(() => engine.sample(props.frozenAt ?? start.phase)), {
+  /** l'instant de l'image courante, pour `layer` */
+  let frameAt = untrack(() => props.frozenAt ?? start.phase)
+  const [frame, setFrame] = createSignal<BotFrame>(engine.sample(frameAt), {
     equals: false
   })
+  function draw(seconds: number) {
+    frameAt = seconds
+    setFrame(engine.sample(seconds))
+  }
   const uid = createUniqueId()
   const maskId = `bot-mask-${uid}`
-  const feltId = `bot-felt-${uid}`
-  const fibresId = `bot-fibres-${uid}`
-  const textured = () => props.material === 'felt-texture' && feltTexture() !== ''
-  const filtre = (): FiltreFeutre | null =>
-    props.material === 'felt' || props.material === 'felt-texture' ? props.material : null
-  /*
-   * `felt-gl` : le corps n'est plus dans le SVG mais dans un canvas, sous un
-   * `foreignObject` a la meme place dans l'empilement. Le canvas est cree a la main
-   * plutot qu'en JSX : sous un <svg>, le compilateur le fabriquerait en SVG.
-   */
-  const gl = () => props.material === 'felt-gl'
-  let feutre: HTMLCanvasElement | undefined
-  function poseFeutre(hote: SVGForeignObjectElement) {
-    feutre = document.createElement('canvas')
-    feutre.style.cssText = `display:block;width:${DEMI_VIEWBOX * 2}px;height:${DEMI_VIEWBOX * 2}px`
-    hote.appendChild(feutre)
-    dessineFeutre()
-  }
-  function dessineFeutre() {
-    const rendu = gl() && feutre ? feltGl() : null
-    if (!rendu || !feutre) return
-    const cote = Math.max(1, Math.round(props.size * (window.devicePixelRatio || 1)))
-    if (feutre.width !== cote) {
-      feutre.width = cote
-      feutre.height = cote
-    }
-    rendu.draw(feutre, frame(), ink(), props.paper)
-  }
 
   let svg!: SVGSVGElement
   let raf = 0
@@ -243,7 +239,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
       else engine.setState(current.state, offsetOf(blocks, index))
       lastRenderedBlock = index
     }
-    setFrame(engine.sample(seconds))
+    draw(seconds)
   }
 
   let pointer: { x: number; y: number } | null = null
@@ -322,12 +318,12 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
     if (props.follow) aim()
     else if (props.gaze) scriptedGaze(props.gaze)
-    setFrame(engine.sample(clock))
+    draw(clock)
   }
 
   function redrawFrozen() {
     if (props.frozenAt === undefined) return
-    setFrame(engine.sample(props.frozenAt))
+    draw(props.frozenAt)
   }
 
   watch(
@@ -393,8 +389,6 @@ export default function BloubBot(rawProps: BloubBotProps) {
   }, { defer: true })
 
   watch(() => props.frozenAt, redrawFrozen, { defer: true })
-
-  watch(() => [frame(), ink(), props.paper, props.size, gl()], dessineFeutre, { defer: true })
 
   createEffect(
     () => props.follow && props.frozenAt === undefined,
@@ -558,13 +552,6 @@ export default function BloubBot(rawProps: BloubBotProps) {
             </linearGradient>
           )}
         </For>
-
-        <Show when={filtre()}>
-          {(kind) => <FeltDefs id={feltId} size={props.size} kind={kind()} />}
-        </Show>
-        <Show when={textured()}>
-          <FeltPattern id={fibresId} size={props.size} href={feltTexture()} />
-        </Show>
       </defs>
 
       <g fill="none" stroke-linecap="round">
@@ -580,48 +567,35 @@ export default function BloubBot(rawProps: BloubBotProps) {
         </For>
       </g>
 
-      <Show when={frame().dotsBehind}><g><Dots /></g></Show>
+      <Show
+        when={props.layer}
+        fallback={
+          <>
+            <Show when={frame().dotsBehind}><g><Dots /></g></Show>
 
-      <Show when={gl()}>
-        <foreignObject
-          ref={poseFeutre}
-          x={-DEMI_VIEWBOX}
-          y={-DEMI_VIEWBOX}
-          width={DEMI_VIEWBOX * 2}
-          height={DEMI_VIEWBOX * 2}
-        />
-      </Show>
+            <g opacity={frame().bodyAlpha}>
+              <path d={frame().bodyPath} fill={props.paper} />
+              <g mask={`url(#${maskId})`}>
+                <rect
+                  x={-DEMI_VIEWBOX}
+                  y={-DEMI_VIEWBOX}
+                  width={DEMI_VIEWBOX * 2}
+                  height={DEMI_VIEWBOX * 2}
+                  fill={ink()}
+                />
+              </g>
+            </g>
 
-      <g
-        opacity={frame().bodyAlpha}
-        filter={filtre() ? `url(#${feltId})` : undefined}
-        display={gl() ? 'none' : undefined}
+            <Show when={!frame().dotsBehind}><g><Dots /></g></Show>
+
+            <Show when={frame().notif}>
+              {(notif) => <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />}
+            </Show>
+          </>
+        }
       >
-        <path d={frame().bodyPath} fill={props.paper} />
-        <g mask={`url(#${maskId})`}>
-          <rect
-            x={-DEMI_VIEWBOX}
-            y={-DEMI_VIEWBOX}
-            width={DEMI_VIEWBOX * 2}
-            height={DEMI_VIEWBOX * 2}
-            fill={ink()}
-          />
-          <Show when={textured()}>
-            <rect
-              x={-DEMI_VIEWBOX}
-              y={-DEMI_VIEWBOX}
-              width={DEMI_VIEWBOX * 2}
-              height={DEMI_VIEWBOX * 2}
-              fill={`url(#${fibresId})`}
-            />
-          </Show>
-        </g>
-      </g>
-
-      <Show when={!frame().dotsBehind}><g><Dots /></g></Show>
-
-      <Show when={frame().notif}>
-        {(notif) => <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />}
+        {/* lu dans du JSX : le rappel de `Show` est hors suivi, l'y lire avertit en strict */}
+        {(layer) => <>{layer()({ frame, time: () => frameAt, clock: () => clock, ink, uid })}</>}
       </Show>
 
       <g fill="none" stroke-linecap="round">

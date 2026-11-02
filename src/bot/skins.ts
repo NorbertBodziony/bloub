@@ -33,6 +33,9 @@ export type ShapeId =
   | 'hexagone'
   | 'nuage'
   | 'goutte'
+  | 'carre'
+  | 'losange'
+  | 'pentagone'
 
 export interface BotShape {
   id: ShapeId
@@ -88,7 +91,13 @@ export const SHAPES: BotShape[] = [
   // 0deg : sommets a gauche et a droite, donc aretes du haut et du bas plates
   { id: 'hexagone', radii: regularPolygonProfile(6, 1.04, 0.26, 0) },
   { id: 'nuage', radii: cloud },
-  { id: 'goutte', radii: droplet }
+  { id: 'goutte', radii: droplet },
+  // 45deg : les sommets dans les coins, donc des aretes droites en haut et en bas.
+  // Arrondi plus serre que le squircle, c'est ce qui l'en distingue.
+  { id: 'carre', radii: regularPolygonProfile(4, 1.2, 0.24, 45) },
+  // -90deg : une pointe vers le haut
+  { id: 'losange', radii: regularPolygonProfile(4, 1.14, 0.3, -90) },
+  { id: 'pentagone', radii: regularPolygonProfile(5, 1.08, 0.28, -90) }
 ]
 
 // Map indexee par `string` et non par `ShapeId` : les appelants interrogent avec
