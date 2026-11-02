@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js'
 import type { JSX } from '@solidjs/web'
 import BloubBot, { type BotLayerContext } from '../components/BloubBot.js'
-import type { Look } from '../bot/engine.js'
+import { BotEngine, type Look } from '../bot/engine.js'
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID, type BotExpression, type ExpressionId } from '../bot/expressions.js'
 import { NOTIF_BLUE } from '../bot/decor.js'
 import { COLOR_BY_ID, SHAPE_BY_ID } from '../bot/skins.js'
@@ -20,9 +20,24 @@ import {
 } from './catalogue.js'
 import type { PlushPassage } from './body.js'
 import PlushLayer from './layer.js'
-import { NO_DOTS, REST_LOOK, THINK_LOOK, dotsToggle, engineState, glide, morphOf, type DotsTrack } from './motion.js'
+import {
+  EMERGE,
+  NO_DOTS,
+  NO_PAD_FADE,
+  SHAKE,
+  dotsToggle,
+  engineState,
+  enter,
+  faceOf,
+  failedPads,
+  lookOf,
+  morphOf,
+  padFadeToggle,
+  type DotsTrack,
+  type PadFade
+} from './motion.js'
 import { tinted } from './tint.js'
-import { DEFAULT_TRANSITION, rendu as etapeA, type PlushTransition } from './transition.js'
+import { DEFAULT_TRANSITION, DUREE, rendu as etapeA, type PlushTransition } from './transition.js'
 
 export interface PlushBotProps {
   /** un des six personnages : corps, couleur, yeux et visage cuits. Prioritaire sur `shape`. */
@@ -31,6 +46,11 @@ export interface PlushBotProps {
   shape?: PlushShapeId
   /** un id du personnaliseur ou `#rrggbb` ; ignore pour un personnage */
   color?: string
+  /**
+   * `asleep` et `failed` imposent leur visage (yeux fermes ; la pose et l'inclinaison de
+   * `triste` sur l'oeil le plus ouvert de la peluche, cf. `failedFace`), comme `wink` et
+   * `wide` le leur : `expression` n'y compte pas.
+   */
   state?: PlushState
   /**
    * Le visage au repos : un id du catalogue ou une expression complete. Sans lui, un
@@ -43,9 +63,24 @@ export interface PlushBotProps {
    * `warp`, `dissolve` ou `cut`. Les yeux suivent le corps. Cf. `transition.ts`.
    */
   transition?: PlushTransition
+  /**
+   * Agrandit le visage : un avatar de 24 a 40 px lit mieux son regard avec des yeux plus
+   * grands que ceux de la capture, comme un caractere en petit corps a une graisse a lui.
+   * Les yeux ET leur ecart grandissent, depuis le bord exterieur du visage (`faceGrowth`) :
+   * agrandis sur place, ils passaient a travers le bord des formes etroites. CHOISI, 1 par
+   * defaut (le visage ajuste, rendu identique) ; le moteur ne change pas. `wide` deborde deja
+   * des corps courts a 1, et davantage au-dela.
+   */
+  eyeScale?: number
   size?: number
   fps?: number
   autoPause?: boolean
+  /**
+   * Arrete la peluche sur la pose a l'ecran, apres la transition en cours, et la reprend de
+   * la meme pose : rien ne saute. Pour un avatar qui ne bouge qu'au survol, c'est elle, pas
+   * `frozenAt` (cf. `paused` de `BloubBot`).
+   */
+  paused?: boolean
   frozenAt?: number
   follow?: boolean
   initialPhase?: number
@@ -145,6 +180,7 @@ export default function PlushBot(props: PlushBotProps) {
       return
     }
     enCours = true
+    context!.hold(DUREE[untrack(transition)])
     setPassage({ avant: p.apres, apres: corps, debut: context!.clock() })
     setBascule(etapeA(untrack(transition), 0).bascule)
   }
@@ -160,10 +196,35 @@ export default function PlushBot(props: PlushBotProps) {
     return bascule() ? p.apres : p.avant
   }
   const expression = createMemo<BotExpression>(() => {
+    const impose = faceOf(state(), cote().face ?? neutre)
+    if (impose) return impose
     const value = props.expression
     if (value === undefined) return cote().face ?? neutre
     return typeof value === 'string' ? (EXPRESSION_BY_ID.get(value) ?? neutre) : value
   })
+  // `failed` donne aux deux yeux le patin de l'oeil le plus ouvert, comme a son visage
+  const padsOf = (s: PlushState) => (s === 'failed' ? failedPads(cote().pads, cote().face ?? neutre) : cote().pads)
+  const pads = createMemo(() => padsOf(state()))
+  /*
+   * Les deux gelules de chaque patin, chargees d'avance : un oeil n'en montre qu'une, et passe a
+   * l'autre quand une expression le fait passer de couche a debout. Pas encore chargee, elle
+   * laissait l'oeil vide le temps de son arrivee. Les images sont gardees tant que le bot vit.
+   */
+  const prechargees = new Set<HTMLImageElement>()
+  createEffect(
+    () => cote().pads.flatMap((p) => [href(p.images.x), href(p.images.y)]).join('|'),
+    (clef) => {
+      if (typeof Image === 'undefined') return
+      prechargees.clear()
+      for (const url of clef.split('|')) {
+        if (!url) continue
+        const img = new Image()
+        img.src = url
+        prechargees.add(img)
+      }
+    }
+  )
+  onCleanup(() => prechargees.clear())
   const vue = createMemo<PlushPassage>(() => {
     const p = passage()
     return { avant: vers(p.avant), apres: vers(p.apres), debut: p.debut }
@@ -215,15 +276,14 @@ export default function PlushBot(props: PlushBotProps) {
    * regard rendu et glisse vers le suivant avec le morph de l'etat d'arrivee, donc il ne
    * saute pas, meme en plein fondu.
    */
-  const depart = untrack(state) === 'thinking' ? THINK_LOOK : REST_LOOK
+  const depart = lookOf(untrack(state))
   let rendu: Look = depart
   // dans un objet : un signal qui recoit une fonction la prendrait pour un calcul
   const trace = (script: GazeScript) => ({ run: (t: number) => (rendu = script(t)) })
   const [gaze, setGaze] = createSignal(trace(() => depart))
   createEffect(state, (s, previous) => {
     if (previous === undefined) return
-    const to = s === 'thinking' ? THINK_LOOK : REST_LOOK
-    setGaze(trace(glide(rendu, to, morphOf(s))))
+    setGaze(trace(enter(rendu, s)))
   })
 
   /* Les points de `thinking`, dates sur l'horloge du bot (`context.clock`). */
@@ -231,9 +291,24 @@ export default function PlushBot(props: PlushBotProps) {
   const [dots, setDots] = createSignal<DotsTrack>(
     untrack(state) === 'thinking' ? { ...NO_DOTS, from: 1, on: true } : NO_DOTS
   )
+  // les « z » de `asleep`, sur le meme modele
+  const [zs, setZs] = createSignal<DotsTrack>(
+    untrack(state) === 'asleep' ? { ...NO_DOTS, from: 1, on: true } : NO_DOTS
+  )
+  // le fondu des patins a l'entree de `failed` et a sa sortie
+  const [padFade, setPadFade] = createSignal<PadFade>(NO_PAD_FADE)
+  createEffect(state, (s, previous) => {
+    if (!context || previous === undefined || (s === 'failed') === (previous === 'failed')) return
+    if (untrack(() => props.frozenAt) !== undefined) return
+    const avant = untrack(() => padsOf(previous))
+    setPadFade((fade) => padFadeToggle(fade, avant, context!.clock()))
+  })
   createEffect(state, (s) => {
     if (!context) return
+    // ce qui entre avec l'etat (regard, « non », points, z, patins) court au plus ceci
+    context.hold(Math.max(morphOf(s), s === 'failed' ? SHAKE : 0, EMERGE, BotEngine.SHAPE_MORPH))
     setDots((track) => dotsToggle(track, s === 'thinking', context!.clock(), s))
+    setZs((track) => dotsToggle(track, s === 'asleep', context!.clock(), s))
   })
 
   const cycle: Block[] = untrack(() => [{ state: engineState(state()), duration: BLOC }])
@@ -248,8 +323,10 @@ export default function PlushBot(props: PlushBotProps) {
       cycle={cycle}
       fps={props.fps}
       autoPause={props.autoPause}
+      paused={props.paused}
       frozenAt={props.frozenAt}
-      follow={props.follow && state() !== 'thinking'}
+      // le pointeur remplacerait le script : ni les points, ni le sommeil, ni le « non » ne tiendraient
+      follow={props.follow && (state() === 'idle' || state() === 'wink' || state() === 'wide' || state() === 'notify')}
       gaze={gaze().run}
       initialPhase={props.initialPhase}
       ariaLabel={props.ariaLabel ?? 'Animated plush Bloub avatar'}
@@ -265,11 +342,14 @@ export default function PlushBot(props: PlushBotProps) {
             frozen={props.frozenAt !== undefined}
             onStep={etape}
             size={props.size}
-            pads={cote().pads}
+            pads={pads()}
+            eyeScale={props.eyeScale}
+            padFade={padFade()}
             padHref={href}
             dot={dot()}
             notif={notif()}
             dots={dots()}
+            zs={zs()}
           />
         )
       }}

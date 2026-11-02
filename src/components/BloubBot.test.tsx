@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { createSignal } from 'solid-js'
 import { render } from '@solidjs/web'
 import { describe, expect, it, vi } from 'vitest'
 import BloubBot, { type BloubBotRef } from './BloubBot'
@@ -161,6 +162,72 @@ describe('BloubBot Solid', () => {
     expect(index).toBeGreaterThan(0)
     expect(host.querySelector('mask path')?.getAttribute('d')).toBe(reference.sample(phase).bodyPath)
     expect(onBlockChange).not.toHaveBeenCalled()
+
+    dispose()
+    vi.unstubAllGlobals()
+  })
+
+  it('paused arrete le bot au repos, sans saut, et joue jusqu\'au bout un changement', async () => {
+    const horloge = horlogeManuelle()
+    const [paused, setPaused] = createSignal(false)
+    const [visage, setVisage] = createSignal<string>(DEFAULT_EXPRESSION)
+    const host = document.createElement('div')
+    const dispose = render(
+      () => <BloubBot cycle={[{ state: 'idle', duration: 100 }]} paused={paused()} expression={visage()} />,
+      host
+    )
+    await Promise.resolve()
+    let ms = 1000
+    // Solid ecrit le DOM au vidage des micro-taches : on le laisse passer a chaque image
+    const images = async (n: number) => {
+      for (let i = 0; i < n && horloge.tourne; i++) {
+        horloge.avance((ms += 16))
+        await Promise.resolve()
+      }
+    }
+    await images(30)
+    expect(horloge.tourne).toBe(true)
+
+    // la pause attend le repos, puis la boucle s'eteint : l'image reste celle de l'arret
+    setPaused(true)
+    await Promise.resolve()
+    const debut = ms
+    while (horloge.tourne && ms - debut < 5000) {
+      horloge.avance((ms += 16))
+      await Promise.resolve()
+    }
+    expect(horloge.tourne).toBe(false)
+    const arret = host.innerHTML
+
+    // la reprise repart de la meme pose : la premiere image a un `dt` nul
+    setPaused(false)
+    await Promise.resolve()
+    expect(horloge.tourne).toBe(true)
+    horloge.avance((ms += 5000))
+    await Promise.resolve()
+    expect(host.innerHTML).toBe(arret)
+    await images(10)
+    expect(host.innerHTML).not.toBe(arret)
+
+    // un changement pendant la pause rallume la boucle le temps du morph, puis l'eteint
+    setPaused(true)
+    await Promise.resolve()
+    while (horloge.tourne) {
+      horloge.avance((ms += 16))
+      await Promise.resolve()
+    }
+    setVisage('surpris')
+    await Promise.resolve()
+    expect(horloge.tourne).toBe(true)
+    let dessine = 0
+    while (horloge.tourne && dessine < 400) {
+      horloge.avance((ms += 16))
+      dessine++
+      await Promise.resolve()
+    }
+    expect(horloge.tourne).toBe(false)
+    // le morph est fini : au moins sa duree, a 16 ms par image (la premiere a un `dt` nul)
+    expect((dessine - 1) * 0.016).toBeGreaterThanOrEqual(BotEngine.SHAPE_MORPH)
 
     dispose()
     vi.unstubAllGlobals()

@@ -41,7 +41,7 @@ for (const block of cycle) {
 invariant(typeof PlushBot === 'function', 'PlushBot is not exported')
 invariant(PLUSH_CHARACTERS.length === 6, `Expected 6 plush characters, got ${PLUSH_CHARACTERS.length}`)
 invariant(PLUSH_SHAPES.length === 11, `Expected 11 plush shapes, got ${PLUSH_SHAPES.length}`)
-invariant(PLUSH_STATES.join() === 'idle,wink,wide,thinking,notify', 'Plush states changed')
+invariant(PLUSH_STATES.join() === 'idle,wink,wide,thinking,notify,asleep,failed', 'Plush states changed')
 invariant(DEFAULT_TRANSITION === 'flip', `Expected the flip by default, got ${DEFAULT_TRANSITION}`)
 invariant(PLUSH_TRANSITIONS.join() === 'flip,pop,warp,dissolve,cut', 'Plush transitions changed')
 invariant(tintRamp('#3b93f0').length === 768, 'tintRamp is not a 256-colour ramp')

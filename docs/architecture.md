@@ -75,6 +75,14 @@ Three things follow, and all three live in `BloubBot.tsx`, not in `src/bot/`:
   the length of the pause. Absent an `IntersectionObserver` the bot is treated as
   visible: the throttle is an economy, never a condition of being displayed.
 
+- **`paused` stops the loop at rest, on the pose on screen.** It is not `frozenAt`:
+  there is still a clock, and the bot resumes from the pose it held (`last = 0` again).
+  The loop runs until `engine.quiet(clock)` — no state morph, shape or face morph, forced
+  blink, or blink in progress — and until every `hold(seconds)` has expired. Each input
+  (state, shape, expression, gaze script, pointer release) holds for its own duration, and
+  a `layer` holds for its own transitions through `BotLayerContext.hold`. A `follow` bot
+  never stops: it follows a pointer. `quiet` reads, it never mutates, like `sample`.
+
 `frozenAt` remains the only way to have no loop at all, and it is what the export
 path uses — it drives its off-screen bot with `renderAt`, so the pause has nothing
 to do there.

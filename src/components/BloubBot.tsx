@@ -46,11 +46,16 @@ export interface BloubBotRef {
  * et `clock` l'horloge du bot MAINTENANT — c'est sur elle que le composant date ses
  * changements d'etat (`engine.setState(id, clock)`), donc un rendu qui date les siens
  * pareil reste dans le meme temps que le moteur, fige ou pas.
+ *
+ * `hold` est la seule chose qu'un rendu dit au composant : « j'ai une transition qui court
+ * encore tant de secondes ». Un bot en pause (`paused`) ne s'arrete pas avant ; sans elle,
+ * il s'arreterait des que le moteur est au repos et figerait la transition du rendu.
  */
 export interface BotLayerContext {
   frame: Accessor<BotFrame>
   time: () => number
   clock: () => number
+  hold: (seconds: number) => void
   ink: Accessor<string>
   uid: string
 }
@@ -88,6 +93,16 @@ export interface BloubBotProps {
    * `renderAt` (l'export, lui, passe par `frozenAt` et n'a jamais de boucle).
    */
   autoPause?: boolean
+  /**
+   * Arrete le bot sans le figer : l'horloge s'arrete sur la pose a l'ecran, et la reprise
+   * repart de la meme, donc rien ne saute ni a l'arret ni au depart. L'arret attend que le
+   * bot soit au repos — pas de fondu, de morph ou de clignement en cours, pas de transition
+   * du `layer` — et un changement de prop pendant la pause se joue jusqu'au bout avant de
+   * s'arreter a nouveau. C'est ce qu'il faut a un avatar qui ne bouge qu'au survol :
+   * `frozenAt`, lui, dessine une DATE, et passer de l'un a l'autre ferait sauter la pose.
+   * Un bot qui suit le pointeur (`follow`) ne s'arrete pas.
+   */
+  paused?: boolean
   /**
    * Date de depart du bot dans son montage, en secondes. Lue une fois, au montage :
    * l'horloge, le bloc et la pose partent de cette date, donc plusieurs bots montes
@@ -201,6 +216,18 @@ export default function BloubBot(rawProps: BloubBotProps) {
   let pendingOffset = 0
   let lastRenderedBlock = -1
 
+  /*
+   * La pause. La boucle tourne tant que le bot n'est pas en pause OU qu'il remue encore :
+   * un changement le remet en mouvement (`hold`), et c'est `tick` qui l'arrete, sur la
+   * premiere image ou le moteur est au repos et ou plus rien n'est retenu.
+   */
+  const [stirring, setStirring] = createSignal(true)
+  let heldUntil = -Infinity
+  function hold(seconds: number) {
+    heldUntil = Math.max(heldUntil, clock + seconds)
+    setStirring(true)
+  }
+
   function apply(index: number, from = 0, posePhase = 0) {
     const current = props.cycle[index]
     if (!current) {
@@ -212,6 +239,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
     setState(current.state)
     engine.setState(current.state, clock, posePhase)
     nextAt = playing() ? blockStart + current.duration : Infinity
+    hold(0)
   }
 
   function goToBlock(index: number) {
@@ -261,6 +289,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
   function release() {
     if (!aiming) return
     engine.setLook(null, clock, TURN_TIME)
+    hold(TURN_TIME)
     aiming = false
   }
 
@@ -319,6 +348,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
     if (props.follow) aim()
     else if (props.gaze) scriptedGaze(props.gaze)
     draw(clock)
+    if (props.paused && !props.follow && clock >= heldUntil && engine.quiet(clock)) setStirring(false)
   }
 
   function redrawFrozen() {
@@ -333,8 +363,10 @@ export default function BloubBot(rawProps: BloubBotProps) {
           gazeSince = clock
           scripted = true
           engine.setLook(run(0), clock - SCRIPT_MORPH, SCRIPT_MORPH)
+          hold(SCRIPT_MORPH)
         } else if (scripted) {
           engine.setLook(null, clock)
+          hold(BotEngine.LOOK_MORPH)
           scripted = false
         }
       }
@@ -348,6 +380,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
   watch(state, (id) => {
       if (engine.state === id) return
       engine.setState(id, clock)
+      hold(0)
       redrawFrozen()
     }, { defer: true })
 
@@ -380,12 +413,19 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
   watch(shapeRadii, (radii) => {
     engine.setShape(radii, clock)
+    hold(0)
     redrawFrozen()
   }, { defer: true })
 
   watch(expression, (value) => {
     engine.setExpression(value, clock)
+    hold(0)
     redrawFrozen()
+  }, { defer: true })
+
+  // se mettre en pause, c'est d'abord finir ce qui est en cours
+  watch(() => props.paused, (paused) => {
+    if (paused) hold(0)
   }, { defer: true })
 
   watch(() => props.frozenAt, redrawFrozen, { defer: true })
@@ -433,6 +473,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
     () =>
       mounted() &&
       props.frozenAt === undefined &&
+      (!props.paused || props.follow || stirring()) &&
       (!props.autoPause || (onscreen() && shown())),
     (awake) => {
       if (awake) run()
@@ -595,7 +636,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
         }
       >
         {/* lu dans du JSX : le rappel de `Show` est hors suivi, l'y lire avertit en strict */}
-        {(layer) => <>{layer()({ frame, time: () => frameAt, clock: () => clock, ink, uid })}</>}
+        {(layer) => <>{layer()({ frame, time: () => frameAt, clock: () => clock, hold, ink, uid })}</>}
       </Show>
 
       <g fill="none" stroke-linecap="round">
