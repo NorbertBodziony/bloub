@@ -1,7 +1,7 @@
 {
   "name": "@norbert_bodziony/bloub",
   "private": false,
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
   "description": "SVG recreation of the x.ai bot avatar. One shape morphing through 14 states, measured off the reference video frame by frame.",
   "license": "MIT",
@@ -19,12 +19,17 @@
     "animation",
     "avatar",
     "solid-js",
-    "morphing"
+    "morphing",
+    "plush"
   ],
   "packageManager": "bun@1.4.0",
   "files": [
     "dist/package/index.js",
     "dist/package/server.js",
+    "dist/package/plush.js",
+    "dist/package/plush-server.js",
+    "dist/package/chunks",
+    "dist/package/assets",
     "dist/package/types"
   ],
   "types": "./dist/package/types/index.d.ts",
@@ -34,6 +39,12 @@
       "browser": "./dist/package/index.js",
       "import": "./dist/package/server.js",
       "default": "./dist/package/server.js"
+    },
+    "./plush": {
+      "types": "./dist/package/types/plush/index.d.ts",
+      "browser": "./dist/package/plush.js",
+      "import": "./dist/package/plush-server.js",
+      "default": "./dist/package/plush-server.js"
     }
   },
   "sideEffects": false,

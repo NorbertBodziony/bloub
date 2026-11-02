@@ -197,7 +197,7 @@ export interface StateDef {
 }
 
 /** Onde de pulsation qui parcourt les trois points de gauche a droite. */
-function dotPulse(t: number, index: number): number {
+export function dotPulse(t: number, index: number): number {
   const p = ((((t - index * 0.5) / 1.5) % 1) + 1) % 1
   const k = p < 0.5 ? 0.5 - 0.5 * Math.cos(p * TAU) : 0
   return clamp(k * 2)

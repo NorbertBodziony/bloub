@@ -131,6 +131,23 @@ Details and the reasoning behind each are in [docs/](docs/):
   doesn't run on an element's first computed style, so it stays quiet there. That's
   why `.panneau` and `.barre-export` are built that way, and why the latter is
   mounted-but-hidden during the arrival rather than absent.
+- **The plush (`src/plush/`) is a separate package entry, and must stay one.** Its images
+  and code never reach `index.js`; `pack:check` fails if they do. It plugs into `BloubBot`
+  through the `layer` slot only, so `BloubBot` must not learn about felt. **Its body is a
+  still image**: no breathing, no morph, only the eyes move. That is the approved plush, not
+  a missing feature. The one exception is a *change* of body (`transition`, `flip` by
+  default), which carries the eyes with it and only exists while it runs: at rest there is
+  one `<image>` and no transform, and `warp`'s WebGL context lives only during its morph.
+  No new timing either: every plush transition reuses an engine `morph` (`SHAPE_MORPH`, or
+  `notify`'s pop curve read off the state, not copied).
+- **`src/plush/assets.ts` is generated** (`bun tools/peluche/assets.ts`) and its URLs carry
+  `@vite-ignore`, because lib mode would inline every image (1.7 MB). `vite.lib.config.ts`
+  strips the comment from the output and copies the images; dropping either step silently
+  breaks consumers. How the images are made: `tools/peluche/README.md`.
+- **Expression and eye-offset changes freeze like poses do.** A `setExpression` mid-morph
+  blends from the blended face (and its weighted boundary ids, `exprDepart`), and a
+  `setState` mid-fade freezes the eye offset (`decalageFige`) with the pose. Only mid-morph,
+  so spaced playback stays byte-identical. `docs/architecture.md` has the measurements.
 - **`Look` aims in ABSOLUTE terms on both axes, and the engine does the mixing**:
   only it knows the pose at instant t. `mix` and `wander` are distinct, and drift is
   added *after* the mix. **`setLook` refuses a non-finite target**: the engine keeps
@@ -146,6 +163,7 @@ Details and the reasoning behind each are in [docs/](docs/):
 | [docs/interface.md](docs/interface.md) | Three-column scene, CSS traps, icons |
 | [docs/export.md](docs/export.md) | The export bar, SVG/PNG/GIF/MP4, why the still export has no GIF |
 | [docs/i18n.md](docs/i18n.md) | The hand-rolled translation layer |
+| [docs/plush.md](docs/plush.md) | The plush entry: states, timings, tint, images |
 
 The README is for people arriving at the repository: what the project is, how to
 run it, the component's API. Don't duplicate it here.
@@ -192,3 +210,6 @@ Assert on the *state* instead (a `MutationObserver` still fires; an
 - `#etat=<id>&stop`: opens one state, playback paused. It looks the state up in the
   user's montages, which are all editable: if they've removed it everywhere, the
   link doesn't apply.
+- `/felt.html` (dev only): the plush gallery, every character and shape. `#parcours`
+  plays interrupted fades, `#fige&t=2.5` freezes an instant, `window.__instant(t)` steps it.
+  `#transitions` puts the five body transitions side by side; `window.__suivant()` steps them.

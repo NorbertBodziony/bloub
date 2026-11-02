@@ -15,7 +15,7 @@ import { NOTIF_BLUE } from '../bot/decor.js'
 import { BotEngine, type BotFrame } from '../bot/engine.js'
 import { clamp, easings } from '../bot/math.js'
 import { lookTarget, TURN_TIME, type GazeScript } from '../ui/gaze.js'
-import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '../bot/expressions.js'
+import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID, type BotExpression } from '../bot/expressions.js'
 import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '../bot/skins.js'
 import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles.js'
 import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
@@ -39,11 +39,29 @@ export interface BloubBotRef {
   renderAt(seconds: number): void
 }
 
+/**
+ * Ce que le composant passe a un rendu de remplacement du corps (`layer`).
+ *
+ * `frame` est l'image courante du moteur ; `time` l'instant ou elle a ete echantillonnee,
+ * et `clock` l'horloge du bot MAINTENANT — c'est sur elle que le composant date ses
+ * changements d'etat (`engine.setState(id, clock)`), donc un rendu qui date les siens
+ * pareil reste dans le meme temps que le moteur, fige ou pas.
+ */
+export interface BotLayerContext {
+  frame: Accessor<BotFrame>
+  time: () => number
+  clock: () => number
+  ink: Accessor<string>
+  uid: string
+}
+
 export interface BloubBotProps {
   size?: number
   shape?: string
+  /** un id du personnalisateur, ou une couleur `#rrggbb` donnee telle quelle */
   color?: string
-  expression?: string
+  /** un id du catalogue, ou une expression complete (un visage qui n'est pas au catalogue) */
+  expression?: string | BotExpression
   paper?: string
   ariaLabel?: string
   frozenAt?: number
@@ -76,6 +94,12 @@ export interface BloubBotProps {
    * ensemble ne respirent pas a l'unisson. Ignoree par un bot fige (`frozenAt`).
    */
   initialPhase?: number
+  /**
+   * Rendu de remplacement du corps, des points et de la pastille : le moteur tourne
+   * pareil, seul le dessin change. C'est ce que `@norbert_bodziony/bloub/plush` branche
+   * ici ; le code du rendu reste dans son entree, hors du bundle principal.
+   */
+  layer?: (context: BotLayerContext) => JSX.Element
   onBlockChange?: (value: number) => void
   onStateChange?: (value: StateId) => void
   onPlayingChange?: (value: boolean) => void
@@ -140,8 +164,13 @@ export default function BloubBot(rawProps: BloubBotProps) {
   }
 
   const shapeRadii = createMemo(() => SHAPE_BY_ID.get(props.shape)?.radii ?? null)
-  const ink = createMemo(() => COLOR_BY_ID.get(props.color)?.hex ?? '#0a0a0c')
-  const expression = createMemo(() => EXPRESSION_BY_ID.get(props.expression) ?? null)
+  const ink = createMemo(
+    () => COLOR_BY_ID.get(props.color)?.hex ?? (/^#[0-9a-f]{6}$/i.test(props.color) ? props.color : '#0a0a0c')
+  )
+  const expression = createMemo(() => {
+    const value = props.expression
+    return typeof value === 'string' ? (EXPRESSION_BY_ID.get(value) ?? null) : (value ?? null)
+  })
 
   const engine = untrack(() => {
     const created = new BotEngine(RAYON, state(), shapeRadii(), expression())
@@ -149,9 +178,15 @@ export default function BloubBot(rawProps: BloubBotProps) {
     if (start.phased) created.reset(state(), start.phase - start.elapsed)
     return created
   })
-  const [frame, setFrame] = createSignal<BotFrame>(untrack(() => engine.sample(props.frozenAt ?? start.phase)), {
+  /** l'instant de l'image courante, pour `layer` */
+  let frameAt = untrack(() => props.frozenAt ?? start.phase)
+  const [frame, setFrame] = createSignal<BotFrame>(engine.sample(frameAt), {
     equals: false
   })
+  function draw(seconds: number) {
+    frameAt = seconds
+    setFrame(engine.sample(seconds))
+  }
   const uid = createUniqueId()
   const maskId = `bot-mask-${uid}`
 
@@ -204,7 +239,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
       else engine.setState(current.state, offsetOf(blocks, index))
       lastRenderedBlock = index
     }
-    setFrame(engine.sample(seconds))
+    draw(seconds)
   }
 
   let pointer: { x: number; y: number } | null = null
@@ -283,12 +318,12 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
     if (props.follow) aim()
     else if (props.gaze) scriptedGaze(props.gaze)
-    setFrame(engine.sample(clock))
+    draw(clock)
   }
 
   function redrawFrozen() {
     if (props.frozenAt === undefined) return
-    setFrame(engine.sample(props.frozenAt))
+    draw(props.frozenAt)
   }
 
   watch(
@@ -532,25 +567,35 @@ export default function BloubBot(rawProps: BloubBotProps) {
         </For>
       </g>
 
-      <Show when={frame().dotsBehind}><g><Dots /></g></Show>
+      <Show
+        when={props.layer}
+        fallback={
+          <>
+            <Show when={frame().dotsBehind}><g><Dots /></g></Show>
 
-      <g opacity={frame().bodyAlpha}>
-        <path d={frame().bodyPath} fill={props.paper} />
-        <g mask={`url(#${maskId})`}>
-          <rect
-            x={-DEMI_VIEWBOX}
-            y={-DEMI_VIEWBOX}
-            width={DEMI_VIEWBOX * 2}
-            height={DEMI_VIEWBOX * 2}
-            fill={ink()}
-          />
-        </g>
-      </g>
+            <g opacity={frame().bodyAlpha}>
+              <path d={frame().bodyPath} fill={props.paper} />
+              <g mask={`url(#${maskId})`}>
+                <rect
+                  x={-DEMI_VIEWBOX}
+                  y={-DEMI_VIEWBOX}
+                  width={DEMI_VIEWBOX * 2}
+                  height={DEMI_VIEWBOX * 2}
+                  fill={ink()}
+                />
+              </g>
+            </g>
 
-      <Show when={!frame().dotsBehind}><g><Dots /></g></Show>
+            <Show when={!frame().dotsBehind}><g><Dots /></g></Show>
 
-      <Show when={frame().notif}>
-        {(notif) => <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />}
+            <Show when={frame().notif}>
+              {(notif) => <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />}
+            </Show>
+          </>
+        }
+      >
+        {/* lu dans du JSX : le rappel de `Show` est hors suivi, l'y lire avertit en strict */}
+        {(layer) => <>{layer()({ frame, time: () => frameAt, clock: () => clock, ink, uid })}</>}
       </Show>
 
       <g fill="none" stroke-linecap="round">

@@ -18,6 +18,9 @@ export interface RenderedEye {
   d: string
   matrix: string
   alpha: number
+  /** taille de la gelule dans son repere (avant `matrix`), en px : ce que `d` dessine */
+  w: number
+  h: number
 }
 
 export interface BotFrame {
@@ -136,6 +139,13 @@ export class BotEngine {
    * fondu est deja en cours. Cf. `setState`.
    */
   private departFige: Pose | null = null
+  /**
+   * Meme chose pour le decalage des yeux (`eyefit.ts`), qui se fond a cote de la pose et
+   * avait le meme defaut : en plein fondu, il repartait du decalage PLEIN de l'etat quitte.
+   * Mesure sur capsule, `notify -> idle -> notify` a 50 ms : 7,3 px de saut sur les deux
+   * yeux, contre 5,3 px pour le plus raide des changements espaces.
+   */
+  private decalageFige: { x: number; y: number } | null = null
   private tCur = 0
   private tPrev = 0
   /**
@@ -152,6 +162,12 @@ export class BotEngine {
   private expr: BotExpression | null = null
   private exprPrev: BotExpression | null = null
   private exprAt = -10
+  /**
+   * Depart du decalage des yeux quand une expression arrive en plein morph : les ids lus
+   * dans la table et leur poids a l'instant du changement. `null` hors de ce cas, et le
+   * depart est alors simplement `exprPrev`. Cf. `setExpression`.
+   */
+  private exprDepart: { id: string | null; poids: number }[] | null = null
   private look: Look = NO_LOOK
   private lookPrev: Look = NO_LOOK
   private lookAt = -10
@@ -187,7 +203,30 @@ export class BotEngine {
    */
   setExpression(expression: BotExpression | null, now = 0) {
     if (expression === this.expr) return
-    this.exprPrev = this.expr
+    /*
+     * Meme defaut, meme remede que `setState` : avec une seule case d'historique, une
+     * expression qui arrivait en plein morph repartait de la CIBLE precedente au lieu du
+     * visage a l'ecran. Mesure sur `neutre -> heureux -> triste` a 80 ms : 18 a 20 px de
+     * saut des yeux, contre 0,1 px d'une image normale.
+     *
+     * On fige donc le visage melange, et le decalage des yeux le suit sans jamais lire la
+     * table sur une valeur interpolee : on garde les ids des BORNES et leur poids a cet
+     * instant (`exprDepart`). Hors morph rien n'est fige, et le rendu est celui d'avant, au
+     * bit pres.
+     */
+    const k = (now - this.exprAt) / BotEngine.SHAPE_MORPH
+    if (this.expr && this.exprPrev && k >= 0 && k < 1) {
+      const t = easings.easeOutQuint(clamp(k))
+      const depart = this.exprDepart ?? [{ id: this.exprPrev.id, poids: 1 }]
+      this.exprDepart = [
+        ...depart.map(({ id, poids }) => ({ id, poids: poids * (1 - t) })).filter(({ poids }) => poids > 1e-9),
+        { id: this.expr.id, poids: t }
+      ]
+      this.exprPrev = blendExpression(this.exprPrev, this.expr, t)
+    } else {
+      this.exprDepart = null
+      this.exprPrev = this.expr
+    }
     this.expr = expression
     this.exprAt = now
   }
@@ -321,14 +360,26 @@ export class BotEngine {
       return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) }
     }
 
+    // le depart de l'axe de l'expression : la borne quittee, ou les bornes figees en plein morph
+    const depart = (radii: number[] | null) => {
+      if (!this.exprDepart) return decalageDesYeux(radii, state, this.exprPrev?.id ?? null)
+      let x = 0
+      let y = 0
+      for (const { id, poids } of this.exprDepart) {
+        const d = decalageDesYeux(radii, state, id)
+        x += d.x * poids
+        y += d.y * poids
+      }
+      return { x, y }
+    }
+
     // axe de l'expression, pour chacune des deux formes en presence
-    const parForme = (radii: number[] | null) =>
-      surAxe(
-        this.exprAt,
-        BotEngine.SHAPE_MORPH,
-        decalageDesYeux(radii, state, this.exprPrev?.id ?? null),
-        decalageDesYeux(radii, state, this.expr?.id ?? null)
-      )
+    const parForme = (radii: number[] | null) => {
+      const arrivee = decalageDesYeux(radii, state, this.expr?.id ?? null)
+      // morph fini : l'arrivee, sans calculer un depart qui ne compte plus
+      if (now - this.exprAt >= BotEngine.SHAPE_MORPH) return arrivee
+      return surAxe(this.exprAt, BotEngine.SHAPE_MORPH, depart(radii), arrivee)
+    }
 
     // puis axe de la forme
     return surAxe(
@@ -359,6 +410,7 @@ export class BotEngine {
     this.cur = id
     this.prev = null
     this.departFige = null
+    this.decalageFige = null
     this.tCur = now
     this.tPrev = now
     this.posePhase = 0
@@ -399,6 +451,22 @@ export class BotEngine {
   }
 
   /**
+   * Decalage des yeux a l'instant `now`, fondu d'etat compris : il suit la MEME courbe que
+   * la silhouette qui le motive, depuis le decalage fige s'il y en a un, sinon depuis celui
+   * de l'etat quitte.
+   */
+  private decalageCompose(now: number): { x: number; y: number } {
+    const def = STATE_BY_ID.get(this.cur)!
+    const decalage = this.decalageAtTime(now, this.cur)
+    const since = now - this.tCur
+    // `prev` est toujours renseigne avec l'origine du fondu : le test est la pour le typage
+    if (since >= def.morph || !this.prev) return decalage
+    const avant = this.decalageFige ?? this.decalageAtTime(now, this.prev)
+    const ratio = easings.easeOutQuint(clamp(since / def.morph))
+    return { x: lerp(avant.x, decalage.x, ratio), y: lerp(avant.y, decalage.y, ratio) }
+  }
+
+  /**
    * Changement d'etat, date.
    *
    * Le moteur ne garde qu'UNE case d'historique, donc un changement qui arrive pendant un
@@ -426,6 +494,7 @@ export class BotEngine {
     const morph = STATE_BY_ID.get(this.cur)!.morph
     const enPleinFondu = this.prev !== null && now - this.tCur < morph
     this.departFige = enPleinFondu ? this.poseComposee(now) : null
+    this.decalageFige = enPleinFondu ? this.decalageCompose(now) : null
     this.prev = this.cur
     this.tPrev = this.tCur
     this.previousPosePhase = this.posePhase
@@ -442,7 +511,7 @@ export class BotEngine {
     const shape = this.shapeAtTime(now)
     const expr = this.exprAtTime(now)
     let pose = this.posed(def, Math.max(0, now - this.tCur + this.posePhase), shape, expr)
-    let decalage = this.decalageAtTime(now, this.cur)
+    const decalage = this.decalageCompose(now)
 
     // --- transition -------------------------------------------------------
     const since = now - this.tCur
@@ -459,17 +528,6 @@ export class BotEngine {
       // part alors trente fois trop loin.
       const ratio = easings.easeOutQuint(clamp(since / def.morph))
       pose = blendPose(origine, pose, ratio)
-      // Le decalage des yeux suit la MEME courbe que la silhouette qui le motive. Il vient
-      // de l'etat quitte, que `setState` renseigne toujours en meme temps que l'origine —
-      // le test est la pour le typage, pas pour un cas reel.
-      const quitte = this.prev
-      if (quitte) {
-        const avant = this.decalageAtTime(now, quitte)
-        decalage = {
-          x: lerp(avant.x, decalage.x, ratio),
-          y: lerp(avant.y, decalage.y, ratio)
-        }
-      }
     }
 
     // --- vie au repos -----------------------------------------------------
@@ -536,6 +594,8 @@ export class BotEngine {
         const k = blinkScale(Math.min(lid, cfg.open))
         eyes.push({
           d: capsulePath(cfg.w * R, cfg.h * R),
+          w: cfg.w * R,
+          h: cfg.h * R,
           matrix: `matrix(${r2(ax)},${r2(ay * k)},${r2(cx2)},${r2(cy2 * k)},${r2(e.x * fit + (offX + decalage.x) * R)},${r2(e.y * fit + (offY + decalage.y) * R)})`,
           alpha: pose.eyeAlpha * clamp(e.depth / 0.12)
         })

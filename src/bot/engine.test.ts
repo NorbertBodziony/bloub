@@ -516,6 +516,39 @@ describe('changement d etat pendant un fondu', () => {
   })
 
   /**
+   * Le decalage des yeux (`eyefit`) se fond a cote de la pose : il doit repartir lui aussi
+   * de la valeur a l'ecran. Il repartait du decalage plein de l'etat quitte — 7,3 px sur
+   * capsule pour `notify -> idle -> notify` a 50 ms.
+   */
+  it('fige aussi le decalage des yeux d une forme personnalisee', () => {
+    const EPS = 1e-4
+    const centres = (e: BotEngine, t: number) =>
+      e.sample(t).eyes.flatMap((y) => {
+        const n = y.matrix.match(/-?\d+\.?\d*(e-?\d+)?/g)!.map(Number)
+        return [n[4]!, n[5]!]
+      })
+    const suites: StateId[][] = [
+      ['notify', 'idle', 'notify'],
+      ['wide', 'wink', 'idle'],
+      ['wink', 'wide', 'notify']
+    ]
+    for (const shape of SHAPE_BY_ID.values()) {
+      for (const suite of suites) {
+        const e = new BotEngine(100, 'idle', shape.radii, EXPRESSION_BY_ID.get('neutre')!)
+        let t = 1
+        for (const id of suite) {
+          const avant = centres(e, t - EPS)
+          e.setState(id, t)
+          const apres = centres(e, t + EPS)
+          const ecart = Math.max(...avant.map((v, i) => Math.abs(v - apres[i]!)))
+          expect(ecart, `${shape.id} ${suite.join('>')} a ${t}s`).toBeLessThan(0.5)
+          t += 0.05
+        }
+      }
+    }
+  })
+
+  /**
    * Et la lecture ESPACEE ne change pas : les blocs d'un montage durent au moins le plus
    * long fondu, donc rien n'y est jamais fige. Verifie sur la sequence complete, image par
    * image — c'est ce qui protege les animations relevees.
@@ -539,5 +572,63 @@ describe('changement d etat pendant un fondu', () => {
     // aucune image vide, et le "!" d'`alert` bouge encore pendant qu'il se fond
     expect(images.every((p) => p.length > 0)).toBe(true)
     expect(new Set(images.slice(-12)).size).toBeGreaterThan(1)
+  })
+})
+
+/**
+ * Meme defaut cote expressions : une expression qui arrivait en plein morph repartait de la
+ * cible precedente, pas du visage a l'ecran — 18 a 20 px de saut des yeux. Elle repart
+ * desormais du visage melange fige, et le decalage des yeux (`eyefit`) des bornes figees.
+ */
+describe('changement d expression pendant un morph', () => {
+  const EPS = 1e-4
+  const centres = (e: BotEngine, t: number) =>
+    e.sample(t).eyes.flatMap((y) => {
+      const n = y.matrix.match(/-?\d+\.?\d*(e-?\d+)?/g)!.map(Number)
+      return [n[4]!, n[5]!, y.w, y.h]
+    })
+  const ecart = (a: number[], b: number[]) => Math.max(...a.map((v, i) => Math.abs(v - b[i]!)))
+  const ids = ['neutre', 'heureux', 'triste', 'surpris', 'colere', 'somnolent'] as const
+  const expr = (id: string) => EXPRESSION_BY_ID.get(id)!
+
+  it('ne saute pas, sur toutes les formes et a tout instant du morph', () => {
+    for (const shape of SHAPE_BY_ID.values()) {
+      for (const [i, a] of ids.entries()) {
+        const b = ids[(i + 1) % ids.length]!
+        const c = ids[(i + 2) % ids.length]!
+        for (const delai of [0.02, 0.08, 0.2, 0.4]) {
+          const e = new BotEngine(100, 'idle', shape.radii, expr(a))
+          e.setExpression(expr(b), 1)
+          const t = 1 + delai
+          const avant = centres(e, t - EPS)
+          e.setExpression(expr(c), t)
+          expect(ecart(avant, centres(e, t + EPS)), `${shape.id} ${a}>${b}>${c} a ${delai}s`).toBeLessThan(0.5)
+        }
+      }
+    }
+  })
+
+  it('tient sur des changements enchaines', () => {
+    const e = new BotEngine(100, 'idle', SHAPE_BY_ID.get('capsule')!.radii, expr('neutre'))
+    let t = 1
+    for (const id of [...ids, ...ids]) {
+      const avant = centres(e, t - EPS)
+      e.setExpression(expr(id), t)
+      expect(ecart(avant, centres(e, t + EPS)), `${id} a ${t}s`).toBeLessThan(0.5)
+      t += 0.06
+    }
+  })
+
+  /** Espaces d'au moins un morph, les changements ne figent rien : rendu identique au bit. */
+  it('ne change rien a des changements espaces', () => {
+    const radii = SHAPE_BY_ID.get('nuage')!.radii
+    const avecHistorique = new BotEngine(100, 'idle', radii, expr('neutre'))
+    avecHistorique.setExpression(expr('heureux'), 1)
+    avecHistorique.setExpression(expr('triste'), 1.5)
+    const sansHistorique = new BotEngine(100, 'idle', radii, expr('heureux'))
+    sansHistorique.setExpression(expr('triste'), 1.5)
+    for (let t = 1.5; t < 2.5; t += 1 / 60) {
+      expect(avecHistorique.sample(t)).toEqual(sansHistorique.sample(t))
+    }
   })
 })

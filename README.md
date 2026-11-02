@@ -29,7 +29,7 @@ something done.
 
 ## What's in it
 
-The rail on the left switches between three views. **Customise** offers 8 body
+The rail on the left switches between three views. **Customise** offers 11 body
 shapes, 12 colours and 16 rest expressions, kept between visits. **Animations** is
 a small editor: arrange states into a timeline, set how long each is held, save the
 result. **Settings** holds the language (French, English or Chinese) and the
@@ -118,7 +118,7 @@ editor, Tailwind, export dialogs, video encoder, or application translations.
 Solid runtime. The package supports SolidJS 2, starting with `2.0.0-rc.0`.
 
 Props: `size`, `shape`, `color`, `expression`, `paper`, `frozenAt`, `cycle`,
-`follow`, `gaze`, `ariaLabel`, `block`, `state`, `playing`, `elapsed`, `fps`,
+`follow`, `gaze`, `layer`, `ariaLabel`, `block`, `state`, `playing`, `elapsed`, `fps`,
 `autoPause`, and `initialPhase`. Each playback value has a matching `on...Change`
 callback. See [BloubBot.tsx](src/components/BloubBot.tsx) for the details.
 
@@ -132,6 +132,25 @@ screen. `fps` caps the rate — a 40 px avatar in a list is indistinguishable at
 from the screen's 120 — and `autoPause`, on by default, stops the loop when the
 bot is off screen or its tab is in the background. Neither changes what the bot
 looks like while someone is watching it.
+
+### The plush bot
+
+```tsx
+import { PlushBot } from '@norbert_bodziony/bloub/plush'
+
+<PlushBot character="nexo" />
+<PlushBot shape="losange" color="#3b93f0" expression="heureux" state="wink" />
+<PlushBot shape={shape()} transition="pop" />
+```
+
+A felt plush version of the bot, in its own entry so its code and images stay out of
+the main bundle. Six baked characters, or any of the 11 shapes in any colour. Only the
+eyes move: `state` is one of `idle`, `wink`, `wide`, `thinking` and `notify`, and
+`expression` takes any of the 16 rest faces. Every change, even inside a fade, blends
+with the engine's own timings. When the body changes (shape, character or colour), it
+turns like a coin and swaps edge-on; `transition` picks another way: `pop`, `warp`,
+`dissolve` or `cut`. The images are separate files that your bundler emits; only
+the ones a bot shows are fetched. [docs/plush.md](docs/plush.md) has the details.
 
 ## Changes
 

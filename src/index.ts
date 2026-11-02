@@ -1,5 +1,5 @@
 export { default as BloubBot } from './components/BloubBot.js'
-export type { BloubBotProps, BloubBotRef } from './components/BloubBot.js'
+export type { BloubBotProps, BloubBotRef, BotLayerContext } from './components/BloubBot.js'
 export * from './bot/engine.js'
 export * from './bot/cycles.js'
 export * from './bot/states.js'

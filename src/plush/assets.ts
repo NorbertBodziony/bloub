@@ -1,0 +1,35 @@
+// Genere par tools/peluche/assets.ts : ne pas editer a la main.
+// Une URL litterale par image, pour que le bundler du consommateur les emette ;
+// @vite-ignore pour que le build du paquet ne les incruste pas (voir le generateur).
+export const ASSET_URLS: Record<string, string> = {
+  'boule.webp': new URL(/* @vite-ignore */ './assets/boule.webp', import.meta.url).href,
+  'cloe-corps.webp': new URL(/* @vite-ignore */ './assets/cloe-corps.webp', import.meta.url).href,
+  'cloe-oeil0.webp': new URL(/* @vite-ignore */ './assets/cloe-oeil0.webp', import.meta.url).href,
+  'cloe-oeil1.webp': new URL(/* @vite-ignore */ './assets/cloe-oeil1.webp', import.meta.url).href,
+  'forme-capsule.webp': new URL(/* @vite-ignore */ './assets/forme-capsule.webp', import.meta.url).href,
+  'forme-carre.webp': new URL(/* @vite-ignore */ './assets/forme-carre.webp', import.meta.url).href,
+  'forme-cercle.webp': new URL(/* @vite-ignore */ './assets/forme-cercle.webp', import.meta.url).href,
+  'forme-galet.webp': new URL(/* @vite-ignore */ './assets/forme-galet.webp', import.meta.url).href,
+  'forme-goutte.webp': new URL(/* @vite-ignore */ './assets/forme-goutte.webp', import.meta.url).href,
+  'forme-hexagone.webp': new URL(/* @vite-ignore */ './assets/forme-hexagone.webp', import.meta.url).href,
+  'forme-losange.webp': new URL(/* @vite-ignore */ './assets/forme-losange.webp', import.meta.url).href,
+  'forme-nuage.webp': new URL(/* @vite-ignore */ './assets/forme-nuage.webp', import.meta.url).href,
+  'forme-pentagone.webp': new URL(/* @vite-ignore */ './assets/forme-pentagone.webp', import.meta.url).href,
+  'forme-squircle.webp': new URL(/* @vite-ignore */ './assets/forme-squircle.webp', import.meta.url).href,
+  'forme-triangle.webp': new URL(/* @vite-ignore */ './assets/forme-triangle.webp', import.meta.url).href,
+  'fred-corps.webp': new URL(/* @vite-ignore */ './assets/fred-corps.webp', import.meta.url).href,
+  'fred-oeil0.webp': new URL(/* @vite-ignore */ './assets/fred-oeil0.webp', import.meta.url).href,
+  'fred-oeil1.webp': new URL(/* @vite-ignore */ './assets/fred-oeil1.webp', import.meta.url).href,
+  'malu-corps.webp': new URL(/* @vite-ignore */ './assets/malu-corps.webp', import.meta.url).href,
+  'malu-oeil0.webp': new URL(/* @vite-ignore */ './assets/malu-oeil0.webp', import.meta.url).href,
+  'malu-oeil1.webp': new URL(/* @vite-ignore */ './assets/malu-oeil1.webp', import.meta.url).href,
+  'nexo-corps.webp': new URL(/* @vite-ignore */ './assets/nexo-corps.webp', import.meta.url).href,
+  'nexo-oeil0.webp': new URL(/* @vite-ignore */ './assets/nexo-oeil0.webp', import.meta.url).href,
+  'nexo-oeil1.webp': new URL(/* @vite-ignore */ './assets/nexo-oeil1.webp', import.meta.url).href,
+  'vita-corps.webp': new URL(/* @vite-ignore */ './assets/vita-corps.webp', import.meta.url).href,
+  'vita-oeil0.webp': new URL(/* @vite-ignore */ './assets/vita-oeil0.webp', import.meta.url).href,
+  'vita-oeil1.webp': new URL(/* @vite-ignore */ './assets/vita-oeil1.webp', import.meta.url).href,
+  'yoshi-corps.webp': new URL(/* @vite-ignore */ './assets/yoshi-corps.webp', import.meta.url).href,
+  'yoshi-oeil0.webp': new URL(/* @vite-ignore */ './assets/yoshi-oeil0.webp', import.meta.url).href,
+  'yoshi-oeil1.webp': new URL(/* @vite-ignore */ './assets/yoshi-oeil1.webp', import.meta.url).href
+}
