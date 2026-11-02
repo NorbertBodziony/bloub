@@ -5,8 +5,12 @@
  * fibres s'assombrissent et se saturent, les fibres eclairees blanchissent un peu.
  *
  * Elle est calculee UNE fois par (image, couleur), sur un canvas, et gardee en URL
- * d'objet : aucun filtre dans la boucle de rendu, dont chaque image coute deja une
+ * `data:` : aucun filtre dans la boucle de rendu, dont chaque image coute deja une
  * mise en page et une peinture (`docs/architecture.md`).
+ *
+ * `data:` et pas une URL d'objet (`blob:`) : une page dont la CSP limite `img-src` a
+ * `'self' data:` refuse les `blob:`, et le corps restait vide. L'encodage passe quand meme
+ * par `toBlob`, asynchrone, hors du fil principal ; `toDataURL` encoderait sur place.
  */
 
 /** la mediane de l'interieur d'un corps gris (`GRIS_CIBLE` de `forme.py`) */
@@ -54,6 +58,17 @@ export function tintRamp(hex: string, { gamma, sheen } = TINT): Uint8ClampedArra
 
 const cache = new Map<string, Promise<string>>()
 
+/** Le blob en URL `data:`, sans passer par une URL d'objet. */
+function enData(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const lecteur = new FileReader()
+    lecteur.onload = () =>
+      typeof lecteur.result === 'string' ? resolve(lecteur.result) : reject(new Error('plush: teinture illisible'))
+    lecteur.onerror = () => reject(lecteur.error ?? new Error('plush: teinture illisible'))
+    lecteur.readAsDataURL(blob)
+  })
+}
+
 function charge(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -64,7 +79,7 @@ function charge(url: string): Promise<HTMLImageElement> {
   })
 }
 
-/** L'URL d'objet du corps `url` teint en `hex`, calculee une fois. Navigateur seulement. */
+/** L'URL `data:` du corps `url` teint en `hex`, calculee une fois. Navigateur seulement. */
 export function tinted(url: string, hex: string): Promise<string> {
   const clef = `${hex.toLowerCase()} ${url}`
   let pending = cache.get(clef)
@@ -86,8 +101,8 @@ export function tinted(url: string, hex: string): Promise<string> {
         px[i + 2] = ramp[g + 2]!
       }
       ctx.putImageData(data, 0, 0)
-      return new Promise<string>((resolve) =>
-        canvas.toBlob((blob) => resolve(blob ? URL.createObjectURL(blob) : canvas.toDataURL()), 'image/webp', 0.92)
+      return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.92)).then((blob) =>
+        blob ? enData(blob) : canvas.toDataURL()
       )
     })
     // un echec ne reste pas en cache : le prochain essai recharge
