@@ -5,7 +5,8 @@ import { PLUSH_CHARACTERS, PLUSH_SHAPES, PLUSH_STATES, PlushBot, type PlushState
 
 /** le visage propre au bot : celui du personnage, `neutre` pour une forme */
 const PROPRE = 'propre'
-const TAILLES = [46, 96, 200]
+// 24 a 40 : les tailles des avatars d'openbot
+const TAILLES = [24, 32, 40, 46, 96, 200]
 
 /*
  * Le parcours : une suite d'etats et de visages, pour regarder les transitions sans
@@ -32,10 +33,26 @@ export default function Sandbox() {
   const [expression, setExpression] = createSignal(params.get('expression') ?? PROPRE)
   const [couleur, setCouleur] = createSignal(params.get('couleur') ?? 'bleu')
   const [fige, setFige] = createSignal(params.has('fige'))
+  // `#yeux=1.25` : l'echelle des yeux d'un avatar petit ; `#pause` : arrete au repos, comme au survol
+  const [yeux, setYeux] = createSignal(Number(params.get('yeux')) || 1)
+  const [pause, setPause] = createSignal(params.has('pause'))
+  /*
+   * `#survol` : comme dans openbot, chaque bot est en pause sauf sous la souris. Sans `follow` :
+   * celui de `BloubBot` est le regard de la vue des reglages (un tour complet, la tete tournee
+   * vers le panneau), pas un survol d'avatar.
+   */
+  const [survol, setSurvol] = createSignal(params.has('survol'))
+  const [sous, setSous] = createSignal<string | null>(null)
+  const enPause = (id: string) => (survol() ? sous() !== id : pause())
   // Instant fige : `#fige&t=2.5`, ou pas a pas depuis l'outil d'enregistrement (`__instant`)
   const [instant, setInstant] = createSignal(Number(params.get('t')) || 1)
-  const fenetre = window as unknown as { __instant: (t: number) => void; __etat: (s: PlushState, e?: string) => void }
+  const fenetre = window as unknown as {
+    __instant: (t: number) => void
+    __etat: (s: PlushState, e?: string) => void
+    __pause: (on: boolean) => void
+  }
   fenetre.__instant = setInstant
+  fenetre.__pause = setPause
   fenetre.__etat = (s, e) => {
     setEtat(s)
     if (e) setExpression(e)
@@ -106,12 +123,26 @@ export default function Sandbox() {
         </label>
         {case_('parcours', parcours, basculeParcours)}
         {case_('figer', fige, setFige)}
+        {case_('pause', pause, setPause)}
+        {case_('survol', survol, setSurvol)}
+        <label style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
+          yeux
+          <input
+            type="range"
+            min="1"
+            max="1.6"
+            step="0.05"
+            value={yeux()}
+            onInput={(e) => setYeux(Number(e.currentTarget.value))}
+          />
+          <span style={{ 'font-variant-numeric': 'tabular-nums', width: '3ch' }}>{yeux().toFixed(2)}</span>
+        </label>
       </div>
 
       <div style={grille()}>
         <For each={PLUSH_CHARACTERS}>
           {(c, i) => (
-            <figure style={{ margin: 0 }}>
+            <figure style={{ margin: 0 }} onMouseEnter={() => setSous(c.id)} onMouseLeave={() => setSous(null)}>
               <PlushBot
                 character={c.id}
                 size={taille()}
@@ -119,6 +150,8 @@ export default function Sandbox() {
                 expression={visage()}
                 initialPhase={i() * 0.73}
                 frozenAt={figeA()}
+                paused={enPause(c.id)}
+                eyeScale={yeux()}
               />
               <figcaption style={legende}>{c.id}</figcaption>
             </figure>
@@ -129,7 +162,7 @@ export default function Sandbox() {
       <div style={grille()}>
         <For each={PLUSH_SHAPES}>
           {(forme, i) => (
-            <figure style={{ margin: 0 }}>
+            <figure style={{ margin: 0 }} onMouseEnter={() => setSous(forme)} onMouseLeave={() => setSous(null)}>
               <PlushBot
                 shape={forme}
                 color={couleur()}
@@ -138,6 +171,8 @@ export default function Sandbox() {
                 expression={visage()}
                 initialPhase={i() * 0.61}
                 frozenAt={figeA()}
+                paused={enPause(forme)}
+                eyeScale={yeux()}
               />
               <figcaption style={legende}>{forme}</figcaption>
             </figure>

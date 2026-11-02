@@ -49,7 +49,12 @@ describe('corps de la peluche', () => {
       const reference = corps(hote)
       const releves: string[] = []
       // garde-fou : le rendu suit bien l'instant, puisque les yeux, eux, bougent
-      const yeux = () => [...hote.querySelectorAll('svg image')].slice(1).map((i) => i.outerHTML).join()
+      // (un patin est pose par son groupe, l'oeil : son `<image>` est le sprite entier, 1 x 1)
+      const yeux = () =>
+        [...hote.querySelectorAll('svg image')]
+          .slice(1)
+          .map((i) => i.closest('g[transform]')?.outerHTML ?? i.outerHTML)
+          .join()
       const yeuxVus = new Set<string>()
       for (const e of [undefined, 'heureux', 'blase'] as const) {
         setExpression(e)

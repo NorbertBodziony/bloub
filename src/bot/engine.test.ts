@@ -631,4 +631,35 @@ describe('changement d expression pendant un morph', () => {
       expect(avecHistorique.sample(t)).toEqual(sansHistorique.sample(t))
     }
   })
+
+  it('quiet attend la fin des morphs et du clignement, sans rien modifier', () => {
+    const e = new BotEngine(100, 'idle', SHAPE_BY_ID.get('cercle')!.radii, EXPRESSION_BY_ID.get('neutre')!)
+    // un instant sans clignement, loin de tout changement
+    let t = 20
+    while (!e.quiet(t)) t += 0.01
+    const avant = e.sample(t)
+    expect(e.quiet(t)).toBe(true)
+    expect(e.sample(t)).toEqual(avant)
+
+    e.setShape(SHAPE_BY_ID.get('losange')!.radii, t)
+    expect(e.quiet(t + BotEngine.SHAPE_MORPH / 2)).toBe(false)
+    e.setExpression(EXPRESSION_BY_ID.get('surpris')!, t)
+    expect(e.quiet(t + BotEngine.SHAPE_MORPH / 2)).toBe(false)
+
+    // un etat qui cligne en entrant n'est pas au repos pendant son fondu
+    const etat = STATES.find((s) => s.blinkIn && s.id !== 'idle')!
+    e.setState(etat.id, t)
+    expect(e.quiet(t + 0.1)).toBe(false)
+    expect(e.quiet(t + 0.01)).toBe(false)
+
+    // apres : il redevient calme, et le clignement du calendrier compte aussi
+    let calme = 0
+    let cligne = 0
+    for (let u = t + Math.max(etat.morph, BotEngine.SHAPE_MORPH) + 0.01; u < t + 40; u += 0.01) {
+      if (e.quiet(u)) calme++
+      else cligne++
+    }
+    expect(calme).toBeGreaterThan(0)
+    expect(cligne).toBeGreaterThan(0)
+  })
 })

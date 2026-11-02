@@ -119,7 +119,7 @@ Solid runtime. The package supports SolidJS 2, starting with `2.0.0-rc.0`.
 
 Props: `size`, `shape`, `color`, `expression`, `paper`, `frozenAt`, `cycle`,
 `follow`, `gaze`, `layer`, `ariaLabel`, `block`, `state`, `playing`, `elapsed`, `fps`,
-`autoPause`, and `initialPhase`. Each playback value has a matching `on...Change`
+`autoPause`, `paused`, and `initialPhase`. Each playback value has a matching `on...Change`
 callback. See [BloubBot.tsx](src/components/BloubBot.tsx) for the details.
 
 `initialPhase` starts the bot at that time of its cycle, in seconds. The component
@@ -131,7 +131,10 @@ frame, so its price is set by how often it draws and by how many of them are on
 screen. `fps` caps the rate — a 40 px avatar in a list is indistinguishable at 30
 from the screen's 120 — and `autoPause`, on by default, stops the loop when the
 bot is off screen or its tab is in the background. Neither changes what the bot
-looks like while someone is watching it.
+looks like while someone is watching it. `paused` stops the loop on the pose on
+screen once it is at rest, and resumes from it: an avatar that animates only on
+hover keeps one instance, rather than swapping a `frozenAt` bot for a live one,
+which jumps between two poses.
 
 ### The plush bot
 
@@ -145,12 +148,13 @@ import { PlushBot } from '@norbert_bodziony/bloub/plush'
 
 A felt plush version of the bot, in its own entry so its code and images stay out of
 the main bundle. Six baked characters, or any of the 11 shapes in any colour. Only the
-eyes move: `state` is one of `idle`, `wink`, `wide`, `thinking` and `notify`, and
-`expression` takes any of the 16 rest faces. Every change, even inside a fade, blends
+eyes move: `state` is one of `idle`, `wink`, `wide`, `thinking`, `notify`, `asleep`
+and `failed`, and `expression` takes any of the 16 rest faces. Every change, even inside a fade, blends
 with the engine's own timings. When the body changes (shape, character or colour), it
 turns like a coin and swaps edge-on; `transition` picks another way: `pop`, `warp`,
-`dissolve` or `cut`. The images are separate files that your bundler emits; only
-the ones a bot shows are fetched. [docs/plush.md](docs/plush.md) has the details.
+`dissolve` or `cut`. `eyeScale` grows the face for small avatars (about 1.3 at
+24–40 px), and `paused` works as on `BloubBot`. The images are separate files that
+your bundler emits; only the ones a bot shows are fetched. [docs/plush.md](docs/plush.md) has the details.
 
 ## Changes
 

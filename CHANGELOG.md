@@ -5,6 +5,54 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-02
+
+### Added
+
+- `PlushBot` states `asleep` and `failed`. `asleep` closes the eyes into stitched arcs,
+  stops blinking and lets three z's rise from the head; `failed` lowers the gaze, tilts the
+  eyes like `triste` and shakes them once, a "no" of the head. The body stays still in both.
+- `PlushBot` `eyeScale`: grows the face (eyes and their spacing) from its outer edge, for
+  avatars of 24 to 40 px whose eyes read too small. 1 by default, rendering unchanged.
+- `BloubBot` and `PlushBot` `paused`: stops the loop on the pose on screen once it is at
+  rest, plays any change made meanwhile to its end, and resumes from that same pose. An
+  avatar that animates only on hover keeps one instance instead of swapping a frozen bot
+  for a live one, which jumped from one pose to another.
+- `BotEngine.quiet(t)`: no morph, fade or forced blink is running at `t`. `BotLayerContext`
+  gains `hold(seconds)`, for a layer to keep a paused bot drawing until its own transition
+  ends.
+- `Look.blink` (engine): scales the blinks, 0 stops them. Absent or 1, the frame is
+  byte-identical to before.
+
+### Changed
+
+- The plush eye pads are matte felt with a soft fibrous edge, the material of a white felt
+  generation, where they were smooth domes with a sharp edge. Their shape, light, colour and
+  shadow are the approved ones; the felt is scaled to each pad, so all characters match.
+- A plush eye pad keeps its capsule shape on every expression and is never stretched. It
+  was stretched in x and y apart to the expression's eye, which made a slab of an upright
+  pad laid flat (`heureux`, `blase`) and would turn felt into streaks. Each pad is now baked
+  as a felt capsule lying down and one standing up (`*-oeil<i>-x.webp`, `-y.webp`, replacing
+  `*-oeil<i>.webp`), and rebuilt from pieces of one of them at one scale. The 24 images
+  weigh 1.0 MB against 323 kB; a bot fetches its own four.
+- A plush blink closes fur lids over the pad, which keeps its open shape, instead of
+  squashing its photo into a stick. The opening is the eye's capsule, posed like the pad and
+  squashed vertically on screen as the engine's measured blink squashes the eye, down to
+  nothing when closed; it has a soft edge, and the mask exists only during the blink. An eye half
+  closed at rest (`somnolent`) is a shorter felt capsule instead, rather than lids cutting the
+  pad into a square. `RenderedEye.open` (engine) exposes the blink's squash, already composed
+  in `matrix`, and `RenderedEye.rest` the expression's squash at rest.
+
+### Fixed
+
+- A plush eye no longer flickers mid-way through an expression change. Where it turns from
+  lying to standing it swaps images, and the two had different fibres; both now carry the
+  same round pad. `PlushBot` also preloads both images of each pad, so the first swap no
+  longer shows an empty eye while the other loads.
+- A blink on a tilted plush eye (`curieux`, `fier`) no longer cuts the pad into a blurry
+  slanted rectangle. The lids cut a horizontal band on screen, which crossed a tilted pad at
+  an angle; it read as a glitch on expression changes between tilted eyes.
+
 ## [0.5.0] — 2026-11-02
 
 ### Added

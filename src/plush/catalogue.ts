@@ -51,17 +51,29 @@ export const PLUSH_SHAPES: readonly PlushShapeId[] = [
  * Les etats d'une peluche : ceux qui GARDENT le corps. Une peluche ne devient pas un point
  * d'exclamation. `thinking` n'est pas l'etat du moteur (il reduit le corps a un point) :
  * la peluche reste au repos, leve les yeux, et trois boules de feutre pulsent a cote.
+ *
+ * `asleep` et `failed` n'existent que chez la peluche, et rien n'y est releve : ce sont
+ * des visages CHOISIS, poses sur l'etat `idle` du moteur (cf. `motion.ts`). `asleep` n'est
+ * pas `sleep`, le point qui rebondit dans la video.
  */
-export type PlushState = 'idle' | 'wink' | 'wide' | 'thinking' | 'notify'
-export const PLUSH_STATES: readonly PlushState[] = ['idle', 'wink', 'wide', 'thinking', 'notify']
+export type PlushState = 'idle' | 'wink' | 'wide' | 'thinking' | 'notify' | 'asleep' | 'failed'
+export const PLUSH_STATES: readonly PlushState[] = ['idle', 'wink', 'wide', 'thinking', 'notify', 'asleep', 'failed']
 
 /**
- * Un patin d'oeil, RELATIF a l'oeil pour lequel il a ete ajuste : `kw`, `kh` multiplient
- * la gelule courante, donc le patin suit l'expression, le clin d'oeil, les yeux ronds.
- * `dx`, `dy` le decalent a l'ecran, en unites de rayon (le recalage de `ajuste-yeux.py`).
+ * Un patin d'oeil, en feutre (`tools/peluche/fit/matiere.py`) : cuit en deux gelules, couchee et
+ * debout, faites de la gelule de l'oeil sur lequel il a ete ajuste. Sur une gelule, il est
+ * recompose de leurs morceaux a l'echelle de son petit cote (`slices.ts`), jamais etire ; le clin d'oeil,
+ * lui, l'ecrase a l'ecran. `dx`, `dy` le decalent a l'ecran, en unites de rayon (le recalage de
+ * `ajuste-yeux.py`).
  */
 export interface PlushPad {
+  /** son identite (`padFade`, `failed`) : l'image couchee */
   file: string
+  /** la gelule couchee et la gelule debout (`slices.ts`) */
+  images: { x: string; y: string }
+  /** le petit cote de la gelule ajustee, en unites de rayon */
+  court: number
+  /** le patin rond (la gelule sans partie droite) mesure `kw` x `kh` fois ce petit cote */
   kw: number
   kh: number
   dx: number
@@ -93,13 +105,22 @@ const PATINS: Record<PlushCharacterId, [Patin, Patin]> = {
   fred: [[1.7586780224155572, 1.667393362265376, 0.039353114938410254, -0.035566855454058126], [1.8556643796915675, 1.6423739844251715, -0.055407781997306026, -0.03778285688705488]]
 }
 
-const pad = (id: string, i: number, eye: EyeCfg, [w, h, dx, dy]: Patin): PlushPad => ({
-  file: `${id}-oeil${i}.webp`,
-  kw: w / eye.w,
-  kh: h / eye.h,
-  dx,
-  dy
-})
+const pad = (id: string, i: number, eye: EyeCfg, [w, h, dx, dy]: Patin): PlushPad => {
+  const court = Math.min(eye.w, eye.h)
+  // le patin rond est le sprite de l'ajustement moins la partie droite de la gelule : son cadre aussi
+  const dw = eye.w > eye.h ? eye.w - court : 0
+  const dh = eye.h > eye.w ? eye.h - court : 0
+  const nom = `${id}-oeil${i}`
+  return {
+    file: `${nom}-x.webp`,
+    images: { x: `${nom}-x.webp`, y: `${nom}-y.webp` },
+    court,
+    kw: (w - dw) / court,
+    kh: (h - dh) / court,
+    dx,
+    dy
+  }
+}
 
 /**
  * Le visage de chaque personnage, ajuste sur la capture (taille, inclinaison et ecart des

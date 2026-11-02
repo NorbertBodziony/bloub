@@ -21,6 +21,16 @@ export interface RenderedEye {
   /** taille de la gelule dans son repere (avant `matrix`), en px : ce que `d` dessine */
   w: number
   h: number
+  /**
+   * l'ecrasement vertical du clignement deja compose dans `matrix` (`blinkScale`), 1 oeil
+   * ouvert : un rendu qui dessine l'oeil autrement qu'un trou peut le retirer de la matrice
+   */
+  open: number
+  /**
+   * le meme ecrasement hors clignement : celui de l'expression au repos (`EyeCfg.open`,
+   * `somnolent`). `open` lui est egal sauf pendant un clignement, ou il descend en dessous
+   */
+  rest: number
 }
 
 export interface BotFrame {
@@ -66,6 +76,10 @@ export interface BotFrame {
  * avec l'arrivee. Comme les yeux vivent sur une sphere, un tour les fait passer
  * derriere la boule et revenir de l'autre cote — et `-360deg` etant le meme
  * angle que `0`, il ne change rien a l'endroit ou ils se posent.
+ *
+ * `blink` dit ce qui reste des clignements (1 par defaut, 0 = aucun). Comme `wander`,
+ * c'est de la vie automatique qu'on module : un oeil deja ferme en tiret (la peluche
+ * endormie) qui clignerait encore s'amincirait d'un coup, a chaque clignement.
  */
 export interface Look {
   yaw: number
@@ -73,7 +87,11 @@ export interface Look {
   mix: number
   spin: number
   wander: number
+  blink?: number
 }
+
+/** le clignement que declenche un changement d'etat (`blinkIn`) */
+const FORCED_BLINK = 0.2
 
 const NO_LOOK: Look = { yaw: 0, pitch: 0, mix: 0, spin: 0, wander: 1 }
 
@@ -82,7 +100,9 @@ const lerpLook = (a: Look, b: Look, t: number): Look => ({
   pitch: lerp(a.pitch, b.pitch, t),
   mix: lerp(a.mix, b.mix, t),
   spin: lerp(a.spin, b.spin, t),
-  wander: lerp(a.wander, b.wander, t)
+  wander: lerp(a.wander, b.wander, t),
+  // absent = 1 : un regard sans `blink` reste celui d'avant, a l'octet pres
+  ...(a.blink === undefined && b.blink === undefined ? {} : { blink: lerp(a.blink ?? 1, b.blink ?? 1, t) })
 })
 
 const lerpEye = (a: Pose['eyes'][number], b: Pose['eyes'][number], t: number) => ({
@@ -295,7 +315,7 @@ export class BotEngine {
      * l'appelant. Celui-la est corrige, mais le moteur n'a pas a dependre de la
      * prudence de ses appelants pour rester rejouable.
      */
-    if (look && !Number.isFinite(look.yaw + look.pitch + look.mix + look.spin + look.wander)) {
+    if (look && !Number.isFinite(look.yaw + look.pitch + look.mix + look.spin + look.wander + (look.blink ?? 1))) {
       return
     }
     this.lookPrev = this.lookAtTime(now)
@@ -392,6 +412,21 @@ export class BotEngine {
 
   get state(): StateId {
     return this.cur
+  }
+
+  /**
+   * Rien n'est en cours a `now` hors de la vie au repos : ni fondu d'etat, ni morph de forme
+   * ou de visage, ni clignement. C'est l'instant ou un bot en pause (`paused` du composant)
+   * peut s'arreter sans figer un oeil a moitie ferme ni une pose a mi-chemin. Le regard n'y
+   * est pas : c'est le composant qui le pose, et il sait quand il a fini. Lecture pure,
+   * comme `sample`.
+   */
+  quiet(now: number): boolean {
+    const morph = STATE_BY_ID.get(this.cur)!.morph
+    if (now - this.tCur < morph) return false
+    if (now - this.shapeAt < BotEngine.SHAPE_MORPH || now - this.exprAt < BotEngine.SHAPE_MORPH) return false
+    if (now - this.blinkAt < FORCED_BLINK) return false
+    return this.lookAtTime(now).blink === 0 || liveliness(now).lid >= 1
   }
 
   /**
@@ -548,9 +583,11 @@ export class BotEngine {
     }
 
     // clignement declenche par le changement d'etat, en plus du calendrier
-    const forced = clamp((now - this.blinkAt) / 0.2)
+    const forced = clamp((now - this.blinkAt) / FORCED_BLINK)
     const forcedLid = forced < 1 ? Math.abs(forced * 2 - 1) : 1
-    const lid = Math.min(life.lid, forcedLid)
+    const ferme = Math.min(life.lid, forcedLid)
+    // sans `blink`, le calcul d'avant tel quel : `1 - (1 - x)` n'est pas toujours `x` en flottant
+    const lid = look.blink === undefined || look.blink === 1 ? ferme : 1 - (1 - ferme) * clamp(look.blink)
 
     const offX = pose.offX + life.driftX
     const offY = pose.offY + life.driftY
@@ -597,6 +634,8 @@ export class BotEngine {
           w: cfg.w * R,
           h: cfg.h * R,
           matrix: `matrix(${r2(ax)},${r2(ay * k)},${r2(cx2)},${r2(cy2 * k)},${r2(e.x * fit + (offX + decalage.x) * R)},${r2(e.y * fit + (offY + decalage.y) * R)})`,
+          open: k,
+          rest: blinkScale(cfg.open),
           alpha: pose.eyeAlpha * clamp(e.depth / 0.12)
         })
       }
