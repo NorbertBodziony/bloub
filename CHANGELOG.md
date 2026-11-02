@@ -5,6 +5,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-11-02
+
+### Fixed
+
+- A tinted plush body (a grey shape, the thinking dots, the notification ball) is a `data:`
+  URL, no longer an object URL. A page whose Content Security Policy allows `data:` but not
+  `blob:` images showed the plush with no body. The encoding stays asynchronous.
+
 ## [0.6.0] — 2026-11-02
 
 ### Added

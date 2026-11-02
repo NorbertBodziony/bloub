@@ -258,8 +258,12 @@ quantile with the baked body. The median stays the requested colour: an exposure
 fitted a little better, but only because Malu's baked body is darker than its ink, which
 is a property of that one generation (Yoshi's is lighter than its own).
 
-The ramp is applied **once per (image, colour)** on a canvas and kept as an object URL.
+The ramp is applied **once per (image, colour)** on a canvas and kept as a `data:` URL.
 Nothing runs in the render loop, which already costs a layout and a paint per frame.
+It is a `data:` URL and not an object URL because a Content Security Policy that allows
+`img-src 'self' data:` blocks `blob:`, and the body then stays empty. The encoding still
+goes through the asynchronous `toBlob` (then a `FileReader`): `toDataURL` would encode
+on the main thread.
 That is browser-only: on the server, a grey shape renders without a body until the client
 tints it.
 
