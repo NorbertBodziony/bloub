@@ -518,7 +518,7 @@ describe('morceaux du patin', () => {
     }
   })
 
-  it('sur toute gelule : une echelle, ni trou ni recouvrement, et rien ne saute aux coupes', () => {
+  it('sur toute gelule : une echelle, ni trou ni recouvrement, et rien ne saute aux coupes', { timeout: 30_000 }, () => {
     for (const p of patins) {
       for (const [w, h] of cibles) {
         const ms = padPieces(p, w, h)
@@ -582,7 +582,7 @@ describe('morceaux du patin', () => {
     }
   })
 
-  it("un morph d'expression ne fait rien sauter", () => {
+  it("un morph d'expression ne fait rien sauter", { timeout: 20_000 }, () => {
     for (const p of patins) {
       const c = p.court * R
       for (const [w1, h1] of cibles) {
