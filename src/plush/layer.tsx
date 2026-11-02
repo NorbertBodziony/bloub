@@ -1,16 +1,24 @@
-import { For, Show, createMemo } from 'solid-js'
+import { For, Show, createEffect, createMemo } from 'solid-js'
 import type { BotLayerContext } from '../components/BloubBot.js'
-import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
+import { RAYON } from '../bot/repere.js'
+import PlushBody, { type PlushPassage } from './body.js'
 import type { PlushPad } from './catalogue.js'
 import { thinkingDots, type DotsTrack } from './motion.js'
+import { REPOS_APRES, rendu, type PlushTransition, type Rendu } from './transition.js'
 
 /** la boule occupe 80 % de son image (`forme.py --boule`) */
 const BOULE = 0.8
 
 export interface PlushLayerProps {
   context: BotLayerContext
-  /** l'image du corps, deja teinte ; rien tant qu'elle n'est pas prete */
-  body: string | null
+  /** le corps, ou le passage d'un corps a l'autre ; une image nulle n'est pas encore prete */
+  passage: PlushPassage
+  transition: PlushTransition
+  /** un bot fige n'a pas d'horloge qui avance : il montre le nouveau corps, au repos */
+  frozen?: boolean
+  /** l'etape de la transition, a chaque changement : le moteur suit `bascule` */
+  onStep?: (step: Pick<Rendu, 'bascule' | 'fini'>) => void
+  size?: number
   pads: readonly [PlushPad, PlushPad]
   padHref: (file: string) => string
   /** la boule teinte a la couleur du bot (points de reflexion) et au bleu de la pastille */
@@ -23,9 +31,33 @@ export interface PlushLayerProps {
  * Le rendu peluche, branche dans `BloubBot` par `layer`. Le corps est une image FIXE :
  * il ne respire pas, ne se deforme pas. Seuls les yeux bougent, poses par les matrices
  * du moteur — c'est la peluche qui a ete validee, celle « qui ne bouge que des yeux ».
+ * La seule exception est le changement de corps (`transition.ts`), qui emporte les yeux
+ * avec lui.
  */
 export default function PlushLayer(props: PlushLayerProps) {
   const frame = () => props.context.frame()
+
+  // l'etape de la transition, relue a chaque image du bot
+  const etape = createMemo<Rendu>(() => {
+    frame()
+    if (props.frozen) return REPOS_APRES
+    return rendu(props.transition, props.context.clock() - props.passage.debut)
+  })
+  createEffect(
+    () => {
+      const { bascule, fini } = etape()
+      return `${bascule}|${fini}`
+    },
+    (clef) => {
+      const [bascule, fini] = clef.split('|')
+      props.onStep?.({ bascule: bascule === 'true', fini: fini === 'true' })
+    }
+  )
+  // au repos, pas d'attribut : une chaine identique a chaque image ne coute rien, mais aucune non plus
+  const echelle = () => {
+    const { sx, sy } = etape()
+    return sx === 1 && sy === 1 ? undefined : `scale(${sx},${sy})`
+  }
 
   const dots = createMemo(() => {
     frame()
@@ -34,18 +66,14 @@ export default function PlushLayer(props: PlushLayerProps) {
 
   return (
     <>
-      <g opacity={frame().bodyAlpha}>
-        <Show when={props.body}>
-          {(href) => (
-            <image
-              href={href()}
-              x={-DEMI_VIEWBOX}
-              y={-DEMI_VIEWBOX}
-              width={DEMI_VIEWBOX * 2}
-              height={DEMI_VIEWBOX * 2}
-            />
-          )}
-        </Show>
+      <g opacity={frame().bodyAlpha} transform={echelle()}>
+        <PlushBody
+          passage={props.passage}
+          transition={props.transition}
+          rendu={etape}
+          clock={props.context.clock}
+          size={props.size}
+        />
         {/*
          * Le patin suit la gelule : sa taille est celle de l'oeil courant fois le rapport
          * releve sur le visage de reference. Il est pose dans le repere de l'oeil

@@ -5,12 +5,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-02
+
 ### Added
 
 - `@norbert_bodziony/bloub/plush`: `PlushBot`, a felt plush bot with a still body and
   moving eyes. Six baked characters, and 11 grey shapes tinted at runtime to any colour.
   States `idle`, `wink`, `wide`, `thinking` and `notify`, with the 16 rest expressions.
   The images ship as separate files, referenced so that a consumer's bundler emits them.
+- `PlushBot` `transition`: how the body changes when its shape, character or colour does.
+  `flip` (default) turns it like a coin and swaps edge-on; `pop`, `warp`, `dissolve` and
+  `cut` are the alternatives. The eyes travel with the body.
 - Three customiser shapes: `carre`, `losange` and `pentagone`.
 - `BloubBot` takes a `layer` render slot in place of the flat body and eyes, and
   `expression` accepts a full `BotExpression` as well as a catalogue id.

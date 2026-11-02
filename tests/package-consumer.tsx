@@ -31,6 +31,6 @@ const plushState: PlushState = 'thinking'
 export const plushConsumer = (
   <>
     <PlushBot character={PLUSH_CHARACTERS[0]!.id} state={plushState} expression="heureux" size={96} />
-    <PlushBot shape={PLUSH_SHAPES[0]!} color="#3b93f0" state="wink" />
+    <PlushBot shape={PLUSH_SHAPES[0]!} color="#3b93f0" state="wink" transition="pop" />
   </>
 )

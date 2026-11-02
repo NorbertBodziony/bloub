@@ -15,3 +15,4 @@ export {
   type PlushState
 } from './catalogue.js'
 export { tintRamp } from './tint.js'
+export { DEFAULT_TRANSITION, PLUSH_TRANSITIONS, type PlushTransition } from './transition.js'

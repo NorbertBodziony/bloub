@@ -1,10 +1,8 @@
 import { For, createSignal, onCleanup } from 'solid-js'
-import type { PlushCharacterId, PlushShapeId } from '@/plush/catalogue'
-import MorphBot, { type Cible } from './MorphBot'
-import { TECHNIQUES } from './techniques'
+import { PLUSH_TRANSITIONS, PlushBot, type PlushCharacterId, type PlushShapeId } from '@/plush'
 
 /*
- * `felt.html#transitions` : les essais de changement de forme, une ligne par technique,
+ * `felt.html#transitions` : les changements de corps, une ligne par `transition`,
  * memes changements au meme instant sur toutes les lignes. `__suivant()` avance d'un pas
  * pour les enregistrements ; `#transitions&auto` enchaine toutes les 1,6 s.
  */
@@ -31,10 +29,11 @@ export default function Transitions() {
   if (auto()) bascule(true)
   onCleanup(() => clearInterval(minuterie))
 
+  type Cible = { shape?: PlushShapeId; color?: string; character?: PlushCharacterId }
   const colonnes: { nom: string; cible: (n: number) => Cible }[] = [
-    { nom: `formes, ${couleur}`, cible: (n) => ({ forme: FORMES[n % FORMES.length]!, couleur }) },
-    { nom: `formes, ${seconde}`, cible: (n) => ({ forme: FORMES[(n + 3) % FORMES.length]!, couleur: seconde }) },
-    { nom: 'personnages', cible: (n) => ({ perso: PERSOS[n % PERSOS.length]! }) }
+    { nom: `formes, ${couleur}`, cible: (n) => ({ shape: FORMES[n % FORMES.length]!, color: couleur }) },
+    { nom: `formes, ${seconde}`, cible: (n) => ({ shape: FORMES[(n + 3) % FORMES.length]!, color: seconde }) },
+    { nom: 'personnages', cible: (n) => ({ character: PERSOS[n % PERSOS.length]! }) }
   ]
   const legende = { color: '#8e8e93', 'font-size': '12px' } as const
 
@@ -58,13 +57,20 @@ export default function Transitions() {
       >
         <span />
         <For each={colonnes}>{(c) => <span style={legende}>{c.nom}</span>}</For>
-        <For each={TECHNIQUES}>
+        <For each={PLUSH_TRANSITIONS}>
           {(t, ligne) => (
             <>
               <span style={{ 'font-size': '15px' }}>{t}</span>
               <For each={colonnes}>
                 {(c, col) => (
-                  <MorphBot technique={t} cible={c.cible(pas())} size={taille} initialPhase={ligne() * 0.37 + col() * 0.53} />
+                  <PlushBot
+                    transition={t}
+                    character={c.cible(pas()).character}
+                    shape={c.cible(pas()).shape}
+                    color={c.cible(pas()).color}
+                    size={taille}
+                    initialPhase={ligne() * 0.37 + col() * 0.53}
+                  />
                 )}
               </For>
             </>

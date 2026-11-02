@@ -135,7 +135,11 @@ Details and the reasoning behind each are in [docs/](docs/):
   and code never reach `index.js`; `pack:check` fails if they do. It plugs into `BloubBot`
   through the `layer` slot only, so `BloubBot` must not learn about felt. **Its body is a
   still image**: no breathing, no morph, only the eyes move. That is the approved plush, not
-  a missing feature. No new timing either: every plush transition reuses an engine `morph`.
+  a missing feature. The one exception is a *change* of body (`transition`, `flip` by
+  default), which carries the eyes with it and only exists while it runs: at rest there is
+  one `<image>` and no transform, and `warp`'s WebGL context lives only during its morph.
+  No new timing either: every plush transition reuses an engine `morph` (`SHAPE_MORPH`, or
+  `notify`'s pop curve read off the state, not copied).
 - **`src/plush/assets.ts` is generated** (`bun tools/peluche/assets.ts`) and its URLs carry
   `@vite-ignore`, because lib mode would inline every image (1.7 MB). `vite.lib.config.ts`
   strips the comment from the output and copies the images; dropping either step silently
@@ -208,3 +212,4 @@ Assert on the *state* instead (a `MutationObserver` still fires; an
   link doesn't apply.
 - `/felt.html` (dev only): the plush gallery, every character and shape. `#parcours`
   plays interrupted fades, `#fige&t=2.5` freezes an instant, `window.__instant(t)` steps it.
+  `#transitions` puts the five body transitions side by side; `window.__suivant()` steps them.

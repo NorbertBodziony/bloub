@@ -6,11 +6,13 @@
  * contour suivent la meme echelle radiale.
  *
  * Les rayons sont ceux du moteur (64 echantillons, `PROFILE_SAMPLES`), interpoles en
- * angle comme `radiusAtAngle`. Rien n'est dessine hors d'un morph : au repos, la galerie
- * remet l'`<image>` simple.
+ * angle comme `radiusAtAngle`. Rien n'est dessine hors d'un morph : au repos, la peluche
+ * remet l'`<image>` simple. Le canvas, et donc le contexte WebGL, n'existe que le temps
+ * d'une transition : un navigateur n'en garde qu'une quinzaine en vie, une liste de
+ * peluches qui en tiendrait chacune un perdrait les plus anciens.
  */
-import { PROFILE_SAMPLES } from '@/bot/profiles'
-import { DEMI_VIEWBOX } from '@/bot/repere'
+import { PROFILE_SAMPLES } from '../bot/profiles.js'
+import { DEMI_VIEWBOX } from '../bot/repere.js'
 
 const VERT = `#version 300 es
 in vec2 p;
@@ -70,7 +72,7 @@ export interface Warp {
   detruit(): void
 }
 
-/** `null` sans WebGL 2 : la galerie retombe alors sur `cut`. */
+/** `null` sans WebGL 2 : la peluche retombe alors sur `cut`. */
 export function creeWarp(canvas: HTMLCanvasElement): Warp | null {
   const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, alpha: true })
   if (!gl) return null

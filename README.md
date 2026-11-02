@@ -140,13 +140,16 @@ import { PlushBot } from '@norbert_bodziony/bloub/plush'
 
 <PlushBot character="nexo" />
 <PlushBot shape="losange" color="#3b93f0" expression="heureux" state="wink" />
+<PlushBot shape={shape()} transition="pop" />
 ```
 
 A felt plush version of the bot, in its own entry so its code and images stay out of
 the main bundle. Six baked characters, or any of the 11 shapes in any colour. Only the
 eyes move: `state` is one of `idle`, `wink`, `wide`, `thinking` and `notify`, and
 `expression` takes any of the 16 rest faces. Every change, even inside a fade, blends
-with the engine's own timings. The images are separate files that your bundler emits; only
+with the engine's own timings. When the body changes (shape, character or colour), it
+turns like a coin and swaps edge-on; `transition` picks another way: `pop`, `warp`,
+`dissolve` or `cut`. The images are separate files that your bundler emits; only
 the ones a bot shows are fetched. [docs/plush.md](docs/plush.md) has the details.
 
 ## Changes

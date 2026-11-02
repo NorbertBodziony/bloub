@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { BotEngine } from '@/bot/engine'
-import { RAYON } from '@/bot/repere'
-import { SHAPE_BY_ID } from '@/bot/skins'
-import { DUREE, POP, RETRAIT, TECHNIQUES, popCourbe, rayonsWarp, rendu } from './techniques'
+import { BotEngine } from '../bot/engine'
+import { RAYON } from '../bot/repere'
+import { SHAPE_BY_ID } from '../bot/skins'
+import { DUREE, POP, RETRAIT, PLUSH_TRANSITIONS, popCourbe, rayonsWarp, rendu } from './transition'
 
 const PAS = 1 / 240
 /*
@@ -12,9 +12,9 @@ const PAS = 1 / 240
  */
 const PROFIL = 0.05
 
-describe('transitions de forme (galerie)', () => {
+describe('transitions de corps', () => {
   it('partent de l ancien corps et finissent sur le nouveau, a l echelle 1', () => {
-    for (const t of TECHNIQUES) {
+    for (const t of PLUSH_TRANSITIONS) {
       const avant = rendu(t, -PAS)
       expect([avant.corps, avant.sx, avant.sy, avant.bascule], t).toEqual(['avant', 1, 1, false])
       const fin = rendu(t, DUREE[t])
@@ -28,7 +28,7 @@ describe('transitions de forme (galerie)', () => {
   })
 
   it('ne sautent pas', () => {
-    for (const t of TECHNIQUES.filter((t) => t !== 'cut')) {
+    for (const t of PLUSH_TRANSITIONS.filter((t) => t !== 'cut')) {
       let prec = rendu(t, 0)
       let pire = 0
       for (let s = PAS; s <= DUREE[t] + PAS; s += PAS) {

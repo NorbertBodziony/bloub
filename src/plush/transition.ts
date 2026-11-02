@@ -1,21 +1,29 @@
 /*
- * Transitions de forme pour la peluche : des essais de galerie, pas du paquet.
+ * Le changement de corps de la peluche : forme, personnage ou couleur. Le corps est une
+ * photo fixe, donc changer de forme echangeait la photo d'un coup ; cinq facons de passer
+ * de l'une a l'autre, au choix par `transition` :
  *
- * Aujourd'hui, changer de forme echange la photo du corps d'un coup (`cut`). Quatre
- * essais a comparer cote a cote : la deformation du feutre (`warp`), la piece qui tourne
- * (`flip`), le rapetissement puis le pop (`pop`) et la dissolution en fibres
- * (`dissolve`). Ce fichier est pur : une fonction du temps ecoule depuis le changement,
- * qui dit quoi dessiner. Le rendu est dans `MorphBot.tsx`.
+ * - `flip` (par defaut) : la piece tourne autour de l'axe vertical, le corps change quand
+ *   elle est de profil, donc l'echange ne se voit jamais ;
+ * - `pop` : l'ancien corps rapetisse jusqu'a rien, le nouveau sort avec le pop de la
+ *   pastille de `notify` ;
+ * - `warp` : le feutre suit le contour que le moteur donne au corps (WebGL, `warp.ts`) ;
+ * - `dissolve` : un bruit fixe, seuille, decouvre le nouveau corps ;
+ * - `cut` : l'echange d'un coup, seuls les yeux glissent avec le moteur.
+ *
+ * Ce fichier est pur : une fonction du temps ecoule depuis le changement, qui dit quoi
+ * dessiner. Le rendu est dans `body.tsx` et `layer.tsx`.
  *
  * Aucune duree nouvelle : `SHAPE_MORPH` (le morph de forme du moteur) et la courbe du pop
  * de la pastille, lue dans l'etat `notify` lui-meme.
  */
-import { BotEngine } from '@/bot/engine'
-import { clamp, easings, lerp } from '@/bot/math'
-import { STATE_BY_ID } from '@/bot/states'
+import { BotEngine } from '../bot/engine.js'
+import { clamp, easings, lerp } from '../bot/math.js'
+import { STATE_BY_ID } from '../bot/states.js'
 
-export type Technique = 'cut' | 'warp' | 'flip' | 'pop' | 'dissolve'
-export const TECHNIQUES: readonly Technique[] = ['cut', 'warp', 'flip', 'pop', 'dissolve']
+export const PLUSH_TRANSITIONS = ['flip', 'pop', 'warp', 'dissolve', 'cut'] as const
+export type PlushTransition = (typeof PLUSH_TRANSITIONS)[number]
+export const DEFAULT_TRANSITION: PlushTransition = 'flip'
 
 const MORPH = BotEngine.SHAPE_MORPH
 
@@ -37,7 +45,7 @@ export const POP = (() => {
 /** le rapetissement avant le pop : la moitie du morph de forme */
 export const RETRAIT = MORPH / 2
 
-export const DUREE: Record<Technique, number> = {
+export const DUREE: Record<PlushTransition, number> = {
   cut: MORPH,
   warp: MORPH,
   dissolve: MORPH,
@@ -46,7 +54,7 @@ export const DUREE: Record<Technique, number> = {
   pop: RETRAIT + POP
 }
 
-/** Ce qu'une technique dessine a un instant donne. */
+/** Ce qu'une transition dessine a un instant donne. */
 export interface Rendu {
   /** quel(s) corps : l'ancien, le nouveau, ou les deux melanges */
   corps: 'avant' | 'apres' | 'deux'
@@ -60,19 +68,19 @@ export interface Rendu {
   fini: boolean
 }
 
-const REPOS_AVANT: Rendu = { corps: 'avant', melange: 0, sx: 1, sy: 1, bascule: false, fini: false }
-const REPOS_APRES: Rendu = { corps: 'apres', melange: 1, sx: 1, sy: 1, bascule: true, fini: true }
+export const REPOS_AVANT: Rendu = { corps: 'avant', melange: 0, sx: 1, sy: 1, bascule: false, fini: false }
+export const REPOS_APRES: Rendu = { corps: 'apres', melange: 1, sx: 1, sy: 1, bascule: true, fini: true }
 
 /**
  * `s` : secondes depuis le changement. Avant (s < 0) on dessine l'ancien corps ; une fois
  * la duree passee, le nouveau, a l'echelle 1.
  */
-export function rendu(technique: Technique, s: number): Rendu {
+export function rendu(transition: PlushTransition, s: number): Rendu {
   if (s < 0) return REPOS_AVANT
-  const duree = DUREE[technique]
+  const duree = DUREE[transition]
   if (s >= duree) return REPOS_APRES
   const k = s / duree
-  switch (technique) {
+  switch (transition) {
     case 'cut':
       // la photo change d'un coup ; seuls les yeux glissent, avec le moteur
       return { ...REPOS_APRES, fini: false }
@@ -81,7 +89,7 @@ export function rendu(technique: Technique, s: number): Rendu {
       // meme courbe que le morph de forme du moteur : le feutre et les yeux vont ensemble
       return { corps: 'deux', melange: easings.easeOutQuint(k), sx: 1, sy: 1, bascule: true, fini: false }
     case 'flip': {
-      // la piece tourne autour de l'axe vertical : la lumiere en haut a gauche ne bouge pas
+      // autour de l'axe vertical : la lumiere en haut a gauche, cuite dans la photo, reste en place
       const e = easings.easeInOutCubic(k)
       const apres = e >= 0.5
       return {

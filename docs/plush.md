@@ -25,7 +25,8 @@ How those images were made, and how to make a new one, is in
 
 ## The body does not move
 
-The body is a still image: it does not breathe, squash, or morph. Only the eyes move,
+The body is a still image: it does not breathe, squash, or morph (except while it changes,
+below). Only the eyes move,
 placed by the engine's eye matrices: gaze drift, blinks, expressions. This is the plush
 that was approved, "the one that only moves its eyes". It is also why only the states
 whose body is the rest body (`baseBody`) exist here:
@@ -43,13 +44,45 @@ can't do. So the plush keeps the engine on `idle`, aims the gaze at the dots thr
 gaze script, and draws the dots itself, pulsed by the state's own function
 (`dotPulse`, 1.5 s, 0.3 s emergence).
 
+## Changing body
+
+The body still changes when the shape, the character or the colour does. A photo can't
+morph, so `transition` decides how one photo becomes the other (`transition.ts`):
+
+| `transition` | | duration |
+|---|---|---|
+| `flip` (default) | turns around the vertical axis, swaps edge-on | 2 × `SHAPE_MORPH` |
+| `pop` | shrinks to nothing, comes back with `notify`'s pastille pop | `SHAPE_MORPH` / 2 + the pop |
+| `warp` | the felt follows the engine's own shape morph (WebGL) | `SHAPE_MORPH` |
+| `dissolve` | a fixed noise, thresholded, uncovers the new body | `SHAPE_MORPH` |
+| `cut` | swaps in one frame; only the eyes glide | none |
+
+- **The eyes go with the body.** The engine only learns the new shape when the body changes
+  on screen (`bascule`): at the edge-on instant for `flip`, at the bottom of the shrink for
+  `pop`, at once for the others. A `flip` or `pop` scales body and eyes together.
+- **`flip` turns around the vertical axis on purpose.** The light is baked into the photo,
+  top left; spinning in the plane would carry it round. A coin turn leaves it in place.
+- **`warp` follows the engine exactly.** Its radii are `shapeAtTime`'s formula, and a test
+  compares them to a real engine, so the felt stays under the eyes. It falls back to a plain
+  swap without WebGL 2. Between two characters of different colours the halfway blend is
+  muddy; that is why it isn't the default.
+- **A change during a transition waits for it to finish**, and the last one wins. Restarting
+  from the middle would make the scale jump. `cut` never waits.
+- **Nothing extra at rest.** The canvas and the filters exist only during a transition; the
+  WebGL context is created per `warp` and released after, because a browser keeps only
+  about sixteen alive. A frozen bot (`frozenAt`) has no clock to run one on and shows the
+  new body directly; so does the first body, and the server render.
+
+`felt.html#transitions` shows all five side by side.
+
 ## No new timings
 
 Every transition takes a duration the engine already has:
 
 - a state change takes that state's `morph` (`wink` 0.3 s, `wide` 0.55 s…);
 - an expression change takes `SHAPE_MORPH` (0.45 s), easeOutQuint;
-- the `thinking` gaze glides over `thinking`'s own `morph`, with the same curve.
+- the `thinking` gaze glides over `thinking`'s own `morph`, with the same curve;
+- a body change takes `SHAPE_MORPH`, or `notify`'s pop curve (see above).
 
 Changes can land at any time, including inside a fade. The engine blends from what is on
 screen in every case; that took two fixes in the engine, described in
