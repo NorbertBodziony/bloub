@@ -76,3 +76,42 @@ describe('corps de la peluche', () => {
     }
   })
 })
+
+/** les yeux dessines : un patin est une `<image>` 1 x 1 dans un `<svg>` imbrique */
+function yeuxCaches(hote: HTMLElement) {
+  const patins = [...hote.querySelectorAll('svg svg image')]
+  expect(patins.length, 'patins des yeux').toBeGreaterThan(0)
+  return patins.every((i) => i.closest('[visibility="hidden"]') !== null)
+}
+
+describe('peluche sans corps', () => {
+  it('cache les yeux tant que le corps teint n est pas pret', () => {
+    const hote = document.createElement('div')
+    document.body.appendChild(hote)
+    // une forme et une couleur : le corps passe par `tinted`, qui ne finit pas dans happy-dom
+    const dispose = render(() => createComponent(PlushBot, { shape: 'cercle', color: '#3b93f0', size: 96, frozenAt: 0 }), hote)
+    try {
+      flush()
+      expect(hote.querySelector('svg image[width="316"]'), 'pas encore de corps').toBeNull()
+      expect(yeuxCaches(hote)).toBe(true)
+    } finally {
+      dispose()
+      hote.remove()
+    }
+  })
+
+  it('montre les yeux avec un corps pret', () => {
+    const hote = document.createElement('div')
+    document.body.appendChild(hote)
+    // un personnage a un corps deja teint : il est pret des le premier rendu
+    const dispose = render(() => createComponent(PlushBot, { character: 'nexo', size: 96, frozenAt: 0 }), hote)
+    try {
+      flush()
+      expect(hote.querySelector('svg image[width="316"]'), 'corps').toBeTruthy()
+      expect(yeuxCaches(hote)).toBe(false)
+    } finally {
+      dispose()
+      hote.remove()
+    }
+  })
+})
