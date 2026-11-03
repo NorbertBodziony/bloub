@@ -112,8 +112,16 @@ export default function PlushLayer(props: PlushLayerProps) {
   // a 1, rien : la chaine de la matrice reste celle d'avant
   const echelleOeil = () => (props.eyeScale && props.eyeScale !== 1 ? ` scale(${props.eyeScale})` : '')
 
+  /*
+   * Le corps teint arrive apres coup (`tinted` : chargement, toile, encodage), et jamais dans un
+   * rendu serveur. Tant qu'aucun corps n'est pret, la peluche entiere reste cachee : des yeux,
+   * des points ou des « z » seuls sur le fond ne sont pas un avatar. Une transition ne part que
+   * d'un corps pret, donc seul le tout premier corps peut manquer.
+   */
+  const sansCorps = () => props.passage.apres.url === null
+
   return (
-    <>
+    <g visibility={sansCorps() ? 'hidden' : undefined}>
       <g opacity={frame().bodyAlpha} transform={echelle()}>
         <PlushBody
           passage={props.passage}
@@ -307,6 +315,6 @@ export default function PlushLayer(props: PlushLayerProps) {
           )
         }}
       </Show>
-    </>
+    </g>
   )
 }

@@ -5,6 +5,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-11-03
+
+### Fixed
+
+- A `PlushBot` with a `shape` and a `color` no longer shows its eyes, dots or z's alone while
+  its tinted body loads. The tint is asynchronous in the browser and never runs in a server
+  render, so the first paint and the server HTML had the eyes with no body. The whole plush
+  now stays hidden until its first body is ready.
+
 ## [0.6.2] — 2026-11-03
 
 ### Fixed
