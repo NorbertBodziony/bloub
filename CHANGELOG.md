@@ -5,6 +5,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-11-03
+
+### Fixed
+
+- The plush bodies no longer show a dark outline on a light background. The bodies were cut
+  out on a dark background, so the fibres at the edge stayed dark and nearly opaque. The six
+  character bodies, the grey shapes and the ball now have that edge lightened toward the
+  colour of the nearest fur (`tools/peluche/fit/lisiere.py`). Alpha, the silhouettes and the
+  eye pads are unchanged, and the bodies look the same on a dark background.
+
 ## [0.6.3] — 2026-11-03
 
 ### Fixed
