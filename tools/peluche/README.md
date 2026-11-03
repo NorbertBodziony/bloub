@@ -143,6 +143,27 @@ the pad to the eye, which turned the fibres into streaks. The scale of each pad 
 
 `fit/ph.json` is the starting point of `compose2.py` when no parameters are given.
 
+## Rim
+
+Every body is cut out of a generation on a dark background, so the fibres that the generation
+drew dark at the edge stay dark and nearly opaque. On a dark page nobody sees them; on a light
+page they draw a dirty outline. `fit/lisiere.py` is the last step for both families: it
+lightens a band at the edge (2 % of the image side) toward the colour of the nearest fur. It
+does not change alpha, so the silhouette and the fibre halo stay the same. It does not touch
+the pads: their dark drop shadow is intended.
+
+```bash
+depot=$(git rev-parse --show-toplevel)
+mkdir -p /tmp/peluche/lisiere/v063
+for f in $(git ls-tree --name-only v0.6.3 src/plush/assets/ | grep -E '(-corps|/forme-|/boule)\.webp$'); do
+  git show "v0.6.3:$f" > "/tmp/peluche/lisiere/v063/$(basename "$f")"
+done
+cd /tmp && "$PELUCHE_PY" -I "$depot/tools/peluche/fit/lisiere.py" /tmp/peluche/lisiere/v063 "$depot/src/plush/assets"
+```
+
+Run it on the v0.6.3 images, or on the new output of a refit, **never on its own output**: a
+second pass lightens the rim again.
+
 ## Measuring
 
 - `mesure/cote-shot.py`: reference | sandbox capture, same framing (the body's box).
