@@ -15,6 +15,7 @@ import { NOTIF_BLUE } from '../bot/decor.js'
 import { BotEngine, type BotFrame } from '../bot/engine.js'
 import { clamp, easings } from '../bot/math.js'
 import { lookTarget, TURN_TIME, type GazeScript } from '../ui/gaze.js'
+import { held } from '../solid-compat.js'
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID, type BotExpression } from '../bot/expressions.js'
 import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '../bot/skins.js'
 import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles.js'
@@ -571,7 +572,10 @@ export default function BloubBot(rawProps: BloubBotProps) {
             {(eye) => <path d={eye().d} transform={eye().matrix} opacity={eye().alpha} fill="#000" />}
           </For>
           <Show when={frame().notch}>
-            {(notch) => <circle cx={notch().x} cy={notch().y} r={notch().r} fill="#000" />}
+            {(notchVisible) => {
+              const notch = held(notchVisible)
+              return <circle cx={notch().x} cy={notch().y} r={notch().r} fill="#000" />
+            }}
           </Show>
         </mask>
 
@@ -630,7 +634,10 @@ export default function BloubBot(rawProps: BloubBotProps) {
             <Show when={!frame().dotsBehind}><g><Dots /></g></Show>
 
             <Show when={frame().notif}>
-              {(notif) => <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />}
+              {(notifVisible) => {
+                const notif = held(notifVisible)
+                return <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />
+              }}
             </Show>
           </>
         }

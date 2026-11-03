@@ -5,6 +5,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-11-03
+
+### Fixed
+
+- A `PlushBot` or `BloubBot` that blinks, ends a pad fade, or loses its notification ball
+  inside a pending Solid transition no longer throws `TypeError: Cannot read properties of
+  null`. Solid keeps the old `Show` child alive until the transition commits; its effects read
+  the narrowed accessor, which is already `null`. The error halted all reactivity on the page.
+  These children now keep their last value.
+
 ## [0.6.1] — 2026-11-02
 
 ### Fixed
