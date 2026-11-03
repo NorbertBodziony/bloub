@@ -31,3 +31,17 @@ export function on<T, U = void>(
 export function onMount(effect: () => void | (() => void)): void {
   onSettled(effect)
 }
+
+/**
+ * La derniere valeur non nulle d'un accesseur de `Show`. Pendant une transition, Solid garde
+ * l'ancien enfant en vie jusqu'a la validation : ses effets relisent l'accesseur, qui rend deja
+ * `null`. Lire un champ dessus levait une TypeError et figeait toute la reactivite.
+ */
+export function held<T>(accessor: Accessor<T | null | undefined | false>): Accessor<T> {
+  let last: T
+  return () => {
+    const value = accessor()
+    if (value != null && value !== false) last = value
+    return last
+  }
+}

@@ -6,6 +6,7 @@ import type { PlushPad } from './catalogue.js'
 import { padExtent, padPieces, type PadPiece } from './slices.js'
 import { dotsVisibility, faceGrowth, lidMask, matrixOf, restCapsule, unsquash, padFadeLevel, sleepZs, thinkingDots, type DotsTrack, type PadFade } from './motion.js'
 import { REPOS_APRES, rendu, type PlushTransition, type Rendu } from './transition.js'
+import { held } from '../solid-compat.js'
 
 /** la boule occupe 80 % de son image (`forme.py --boule`) */
 const BOULE = 0.8
@@ -191,7 +192,8 @@ export default function PlushLayer(props: PlushLayerProps) {
                      * verticalement a l'ecran autour du centre de l'oeil. Un `scale(1,0)` ne peint rien.
                      */}
                     <Show when={paupiere()}>
-                      {(l) => {
+                      {(paupiereVisible) => {
+                        const l = held(paupiereVisible)
                         const cx = () => ox() + l().x
                         const cy = () => oy() + l().y
                         return (
@@ -221,7 +223,8 @@ export default function PlushLayer(props: PlushLayerProps) {
                     </Show>
                     <g transform={transform()} opacity={eye().alpha}>
                       <Show when={ancien()}>
-                        {(p) => {
+                        {(ancienVisible) => {
+                          const p = held(ancienVisible)
                           const pieces = createMemo(() => padPieces(p(), taille().w, taille().h))
                           return patin(p, pieces, () => (1 - sommeil()) * (1 - fondu()))
                         }}
@@ -291,15 +294,18 @@ export default function PlushLayer(props: PlushLayerProps) {
       </For>
 
       <Show when={props.notif ? frame().notif : null}>
-        {(notif) => (
-          <image
-            href={props.notif!}
-            x={notif().x - notif().r / BOULE}
-            y={notif().y - notif().r / BOULE}
-            width={(2 * notif().r) / BOULE}
-            height={(2 * notif().r) / BOULE}
-          />
-        )}
+        {(notifVisible) => {
+          const notif = held(notifVisible)
+          return (
+            <image
+              href={props.notif!}
+              x={notif().x - notif().r / BOULE}
+              y={notif().y - notif().r / BOULE}
+              width={(2 * notif().r) / BOULE}
+              height={(2 * notif().r) / BOULE}
+            />
+          )
+        }}
       </Show>
     </>
   )
