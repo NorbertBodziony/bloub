@@ -9,7 +9,9 @@ import type { EyeCfg } from '../bot/states.js'
  *   (Higgsfield) puis recales sur le moteur par `tools/peluche/`. Leur couleur est cuite
  *   dans l'image, leur visage est un vrai `BotExpression` ajuste sur la capture.
  * - les FORMES : un corps gris neutre par forme du personnaliseur, teint a l'execution
- *   (`tint.ts`). Les yeux y portent le patin generique.
+ *   (`tint.ts`), tire de la bibliotheque de feutre (`tools/peluche/fit/biblioteka.py`). Les
+ *   yeux y portent le patin generique, sauf sur les six expressions qu'une gelule ne fait pas,
+ *   qui ont leur dessin (`SPRITE_PADS`).
  *
  * Tous les nombres de ce fichier sont des AJUSTEMENTS (`tools/peluche/`), pas des
  * reglages : les arrondir decale les yeux de leur place sur la capture.
@@ -78,6 +80,22 @@ export interface PlushPad {
   kh: number
   dx: number
   dy: number
+  /**
+   * Un oeil-SPRITE : un dessin d'oeil entier (arc, chevron, coin), pas une gelule. `images.x` et
+   * `images.y` sont alors la meme image, posee d'un seul morceau (`spritePieces`), et `court`,
+   * `kw`, `kh` ne servent pas.
+   */
+  sprite?: PlushSprite
+}
+
+/**
+ * Les proportions d'un oeil-sprite, mesurees par `biblioteka.py` : le feutre occupe `w` x `h`
+ * de son image, centre, et sa hauteur vaut `aspect` fois sa largeur.
+ */
+export interface PlushSprite {
+  w: number
+  h: number
+  aspect: number
 }
 
 export interface PlushCharacter {
@@ -162,12 +180,72 @@ export const PLUSH_CHARACTERS: readonly PlushCharacter[] = [
 export const PLUSH_CHARACTER_BY_ID = new Map(PLUSH_CHARACTERS.map((c) => [c.id, c]))
 
 /**
- * Le patin des formes grises : le premier oeil de Fred, le seul patin rond et droit
- * (inclinaison nulle), donc le seul qui ne porte pas l'angle d'un visage particulier.
- * Sans decalage : il a ete recale pour Fred, pas pour une forme.
+ * Le patin des formes grises, en feutre blanc de la bibliotheque (`biblioteka.py`) : le patin rond
+ * est un oeil rond de `surpris`, la partie droite le feutre d'une gelule d'`attentif`. Sans
+ * decalage : il n'a ete recale sur aucune capture. `court` ne sert qu'aux tests (`slices.ts`
+ * recompose a l'echelle de la gelule de l'oeil) : celui de Fred, le patin qu'il remplace.
  */
 const FRED = PLUSH_CHARACTER_BY_ID.get('fred')!
-export const GENERIC_PAD: PlushPad = { ...FRED.pads[0], dx: 0, dy: 0 }
+export const GENERIC_PAD: PlushPad = {
+  file: 'patin-x.webp',
+  images: { x: 'patin-x.webp', y: 'patin-y.webp' },
+  court: FRED.pads[0].court,
+  kw: 1.3,
+  kh: 1.3,
+  dx: 0,
+  dy: 0
+}
+
+/**
+ * Les expressions qu'une gelule ne sait pas faire, et que la bibliotheque dessine : arcs
+ * (`heureux`, `fier`), chevrons (`hilare`), coins (`colere`), demi-ovales (`blase`), traits en U
+ * (`somnolent`). Les dix autres gardent le patin generique et le morph continu du moteur.
+ */
+export type PlushSpriteExpressionId = Extract<ExpressionId, 'heureux' | 'hilare' | 'colere' | 'fier' | 'blase' | 'somnolent'>
+
+/** largeur, hauteur du feutre dans l'image, et hauteur / largeur : tels que `biblioteka.py` les a ecrits */
+type Sprite = [number, number, number]
+
+const SPRITES: Record<PlushSpriteExpressionId, [Sprite, Sprite]> = {
+  heureux: [[0.8060453400503779, 0.698356807511737, 0.5586854460093896], [0.8060453400503779, 0.6989079563182528, 0.5569422776911076]],
+  hilare: [[0.7681521093285799, 0.8060453400503779, 1.2623762376237624], [0.7687687687687688, 0.8060453400503779, 1.25]],
+  colere: [[0.8060453400503779, 0.732831291446555, 0.657258064516129], [0.8080808080808081, 0.732904679213404, 0.6550335570469799]],
+  fier: [[0.8060453400503779, 0.636748036811996, 0.4218455743879473], [0.8080808080808081, 0.6364507834687643, 0.41965973534971646]],
+  blase: [[0.8060453400503779, 0.6869668380317496, 0.532399299474606], [0.8060453400503779, 0.6889323248633183, 0.5296167247386759]],
+  somnolent: [[0.8060453400503779, 0.6238850738021943, 0.4016260162601626], [0.8080808080808081, 0.6294815660892188, 0.40522875816993464]]
+}
+
+const sprite = (expr: PlushSpriteExpressionId, i: 0 | 1): PlushPad => {
+  const [w, h, aspect] = SPRITES[expr][i]
+  const file = `oeil-${expr}-${i}.webp`
+  return { file, images: { x: file, y: file }, court: 0, kw: 1, kh: 1, dx: 0, dy: 0, sprite: { w, h, aspect } }
+}
+
+/** Les yeux-sprites d'une forme grise, par expression : l'oeil gauche (0), puis le droit. */
+export const SPRITE_PADS = Object.fromEntries(
+  (Object.keys(SPRITES) as PlushSpriteExpressionId[]).map((e) => [e, [sprite(e, 0), sprite(e, 1)] as const])
+) as Record<PlushSpriteExpressionId, readonly [PlushPad, PlushPad]>
+
+export const spritePadsOf = (id: string): readonly [PlushPad, PlushPad] | null =>
+  Object.hasOwn(SPRITE_PADS, id) ? SPRITE_PADS[id as PlushSpriteExpressionId] : null
+
+/**
+ * La couleur par defaut de chaque forme : celle de son corps dans la bibliotheque (mediane de
+ * l'interieur, `biblioteka.py`). `color` la remplace.
+ */
+export const SHAPE_INKS: Record<PlushShapeId, string> = {
+  carre: '#bb8bd3',
+  cercle: '#efb215',
+  hexagone: '#94cc9f',
+  capsule: '#f87275',
+  nuage: '#5ac2eb',
+  galet: '#f19e74',
+  squircle: '#ccaddc',
+  triangle: '#0ebab2',
+  goutte: '#ee8294',
+  losange: '#f49053',
+  pentagone: '#6b96e3'
+}
 
 /** Corps gris d'une forme, et la boule de feutre (points de reflexion, pastille). */
 export const shapeBody = (shape: PlushShapeId) => `forme-${shape}.webp`

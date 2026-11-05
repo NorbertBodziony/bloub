@@ -1,4 +1,4 @@
-import type { PlushPad } from './catalogue.js'
+import type { PlushPad, PlushSprite } from './catalogue.js'
 
 /**
  * Le patin sur une gelule de `w` x `h` px : des morceaux d'une gelule de feutre, jamais etiree.
@@ -79,6 +79,28 @@ export function padPieces(pad: PlushPad, w: number, h: number): PadPiece[] {
     paire(a0, a1, i0, i0 + ((a1 - a0) / P) * L)
   }
   return out
+}
+
+/**
+ * La demi-taille du feutre d'un oeil-sprite pose sur la gelule `w` x `h` (px) inclinee de `tilt`
+ * degres. Le dessin porte deja sa pente : il est pose droit (`layer.tsx` retire l'inclinaison),
+ * et prend la LARGEUR que la gelule inclinee occupe a l'ecran. Un dessin plus haut que large
+ * (`hilare`) prend cette largeur en hauteur : sinon ses chevrons debordaient du visage. CHOISI,
+ * juge sur les onze formes.
+ */
+export function spriteFelt(sprite: PlushSprite, w: number, h: number, tilt: number): { x: number; y: number } {
+  const t = Math.abs((tilt * Math.PI) / 180)
+  const cote = w * Math.cos(t) + h * Math.sin(t)
+  const large = sprite.aspect > 1 ? cote / sprite.aspect : cote
+  return { x: large / 2, y: (large * sprite.aspect) / 2 }
+}
+
+/** Le sprite d'un seul morceau : toute son image, le feutre centre sur l'oeil. */
+export function spritePieces(sprite: PlushSprite, w: number, h: number, tilt: number): PadPiece[] {
+  const f = spriteFelt(sprite, w, h, tilt)
+  const iw = (2 * f.x) / sprite.w
+  const ih = (2 * f.y) / sprite.h
+  return [{ src: 'x', x: -iw / 2, y: -ih / 2, w: iw, h: ih, viewBox: '0 0 1 1' }]
 }
 
 /** La demi-etendue des morceaux, centres sur l'oeil : ce que couvrent les images, frange et ombre comprises. */

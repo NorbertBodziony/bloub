@@ -9,9 +9,9 @@ Two families, two pipelines:
 | | Characters (nexo, vita, cloe, malu, yoshi, fred) | Grey shapes (`forme-*.webp`, `boule.webp`) |
 |---|---|---|
 | Body | baked, in the character's colour | neutral grey, tinted at runtime (`src/plush/tint.ts`) |
-| Eyes | two felt pads per character, each lying and standing (`*-oeil<i>-x/y.webp`) | none: the generic pad of the layer |
+| Eyes | two felt pads per character, each lying and standing (`*-oeil<i>-x/y.webp`) | the generic pad (`patin-x/y.webp`), and a sprite per eye for six expressions (`oeil-<expr>-<i>.webp`) |
 | Fitted against | a capture of the app (`PELUCHE_REF`) | nothing: the engine's outline only |
-| Script | `fit/bot.sh`, `fit/relief.py`, then `fit/matiere.py` | `fit/recolte.sh` (`fit/forme.py`) |
+| Script | `fit/bot.sh`, `fit/relief.py`, then `fit/matiere.py` | `fit/biblioteka.py` (the 0.7 library), or `fit/recolte.sh` (`fit/forme.py`) for one shape |
 
 ## Working folder
 
@@ -54,6 +54,39 @@ consistent from one generation to the next.
 Nothing in this pipeline is worth spending credits on. A generation takes several
 minutes on Unlimited; when one misses (a face drawn on the body, a tint, the ball
 touching the body), regenerate rather than retouch.
+
+## The 0.7 library
+
+The current shapes, the generic pad and the sprite eyes all come from one generated library
+(`biblioteka-bloub`: `body/`, eleven eyeless coloured bodies; `oczy/`, sixteen white felt eye
+pairs, one per expression). They are PNGs with a real alpha, so nothing is cut out of a dark
+background.
+
+```bash
+bun tools/peluche/formes.ts /tmp/peluche/gris/entrees            # formes.json: the engine outlines
+$PELUCHE_PY -I tools/peluche/fit/biblioteka.py /tmp/peluche/gris/entrees/formes.json <biblioteka-bloub> /tmp/peluche/biblioteka
+/bin/cp -f /tmp/peluche/biblioteka/*.webp src/plush/assets/
+bun tools/peluche/assets.ts
+```
+
+It writes:
+
+- `forme-<forme>.webp`: the body fitted box to box on the engine outline, then normalised
+  like `forme.py`. Its original colour (the interior median) is written to
+  `biblioteka.json` and becomes `SHAPE_INKS` in `catalogue.ts`.
+- `patin-x/y.webp`: the generic pad in `slices.ts`'s format. The round pad is one eye of
+  `03-zdziwione`. The straight part is felt from the straight part of `02-uwazne`, read
+  over `BARRE` and mirrored, and blended into the round pad over `COUTURE`.
+- `oeil-<expr>-<i>.webp`: the six expressions a capsule cannot draw, one image per eye,
+  with the felt centred in it. Their proportions (`biblioteka.json`, `sprites`) go into
+  `SPRITES` in `catalogue.ts` **as they are**.
+
+The script prints each body's scale and anisotropy (x scale over y scale). It fits box to
+box, so a body that was generated with different proportions from the engine outline gets
+squashed. Check the print, and regenerate any body whose anisotropy is far from 1. In the
+0.7 library, `losange` (1.48) and, less so, `capsule` (0.82) are like that. `galet` and
+`goutte` don't match the outline well either. Their inputs for a new generation are the
+`formes.ts` SVGs.
 
 ## Grey shapes
 

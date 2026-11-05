@@ -3,7 +3,7 @@ import type { BotLayerContext } from '../components/BloubBot.js'
 import { RAYON } from '../bot/repere.js'
 import PlushBody, { type PlushPassage } from './body.js'
 import type { PlushPad } from './catalogue.js'
-import { padExtent, padPieces, type PadPiece } from './slices.js'
+import { padExtent, padPieces, spriteFelt, spritePieces, type PadPiece } from './slices.js'
 import { dotsVisibility, faceGrowth, lidMask, matrixOf, restCapsule, unsquash, padFadeLevel, sleepZs, thinkingDots, type DotsTrack, type PadFade } from './motion.js'
 import { REPOS_APRES, rendu, type PlushTransition, type Rendu } from './transition.js'
 import { held } from '../solid-compat.js'
@@ -149,11 +149,26 @@ export default function PlushLayer(props: PlushLayerProps) {
             const m = createMemo(() => matrixOf(eye().matrix))
             // la gelule dessinee : celle de l'oeil, raccourcie sur une expression mi-close (`somnolent`)
             const taille = createMemo(() => restCapsule(m(), eye().open, eye().rest, eye().w, eye().h))
-            const morceaux = createMemo(() => padPieces(pad(), taille().w, taille().h))
-            const correction = createMemo(() => unsquash(m(), eye().open))
-            // les paupieres : seulement pendant un clignement
+            /*
+             * Un sprite n'est pas une gelule : un seul morceau, a la taille de la gelule de l'oeil
+             * (pas de la gelule raccourcie : le dessin de `somnolent` est deja mi-clos), et pose
+             * DROIT, sa pente etant dans le dessin.
+             */
+            const piecesDe = (p: PlushPad) =>
+              p.sprite ? spritePieces(p.sprite, eye().w, eye().h, eye().tilt) : padPieces(p, taille().w, taille().h)
+            const morceaux = createMemo(() => piecesDe(pad()))
+            const retire = createMemo(() => unsquash(m(), eye().open))
+            const correctionDe = (p: PlushPad) => {
+              if (!p.sprite || !eye().tilt) return retire()
+              return `${retire() ?? ''} rotate(${-eye().tilt})`.trim()
+            }
+            const correction = createMemo(() => correctionDe(pad()))
+            // les paupieres : seulement pendant un clignement ; sur un sprite, elles suivent son feutre
             const paupiere = createMemo(() => {
-              const gelule = { x: taille().w / 2, y: taille().h / 2 }
+              const p = pad()
+              const gelule = p.sprite
+                ? spriteFelt(p.sprite, eye().w, eye().h, eye().tilt)
+                : { x: taille().w / 2, y: taille().h / 2 }
               return lidMask(m(), eye().open, eye().rest, gelule, padExtent(morceaux()))
             })
             const id = `${props.context.uid}-paupiere-${i}`
@@ -162,6 +177,7 @@ export default function PlushLayer(props: PlushLayerProps) {
             const oy = () => pad().dy * RAYON + (recul()?.[i]?.y ?? 0)
             // des accesseurs : les noeuds restent les memes d'une image a l'autre, seuls leurs attributs suivent
             const patin = (p: () => PlushPad, pieces: () => PadPiece[], opacite: () => number) => {
+              const transform = () => (p() === pad() ? correction() : correctionDe(p()))
               // plusieurs morceaux, bord a bord : ils s'ADDITIONNENT (`plus-lighter`) dans un groupe
               // isole, leurs couvertures antialiasees se completent a 1. « Par-dessus », ils
               // laissaient un liseré du corps a chaque coupe.
@@ -169,7 +185,7 @@ export default function PlushLayer(props: PlushLayerProps) {
               return (
                 <g
                   opacity={opacite() < 1 ? opacite() : undefined}
-                  transform={correction()}
+                  transform={transform()}
                   style={coupe() ? ISOLE : undefined}
                 >
                   <For each={pieces()} keyed={false}>
@@ -233,7 +249,7 @@ export default function PlushLayer(props: PlushLayerProps) {
                       <Show when={ancien()}>
                         {(ancienVisible) => {
                           const p = held(ancienVisible)
-                          const pieces = createMemo(() => padPieces(p(), taille().w, taille().h))
+                          const pieces = createMemo(() => piecesDe(p()))
                           return patin(p, pieces, () => (1 - sommeil()) * (1 - fondu()))
                         }}
                       </Show>

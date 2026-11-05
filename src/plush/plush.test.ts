@@ -14,7 +14,10 @@ import {
   PLUSH_CHARACTER_BY_ID,
   PLUSH_SHAPES,
   PLUSH_STATES,
+  SHAPE_INKS,
+  SPRITE_PADS,
   shapeBody,
+  spritePadsOf,
   type PlushPad,
   type PlushState
 } from './catalogue'
@@ -54,7 +57,7 @@ import {
   thinkingDots,
   type DotsTrack
 } from './motion'
-import { BARRE, BARRES, padPieces, type PadPiece } from './slices'
+import { BARRE, BARRES, padPieces, spriteFelt, spritePieces, type PadPiece } from './slices'
 import { GRIS, parseHex, tintRamp } from './tint'
 
 const fichier = (nom: string) => fileURLToPath(new URL(`./assets/${nom}`, import.meta.url))
@@ -626,6 +629,52 @@ describe('morceaux du patin', () => {
         expect(Math.abs(fw / fh - W / H) * H, nom).toBeLessThan(1)
       }
     }
+  })
+
+  it('un oeil-sprite garde les proportions de son image, droit et sans deborder', () => {
+    for (const [id, paire] of Object.entries(SPRITE_PADS)) {
+      // un dessin pour une expression du catalogue, un par oeil
+      const e = EXPRESSION_BY_ID.get(id as never)!
+      expect(e, id).toBeTruthy()
+      expect(spritePadsOf(id)).toBe(paire)
+      paire.forEach((p, i) => {
+        const s = p.sprite!
+        expect(p.images.x).toBe(p.file)
+        expect(p.images.y).toBe(p.file)
+        expect(ASSET_URLS[p.file], p.file).toBeTruthy()
+        const { w, h, tilt = 0 } = e.eyes[i]!
+        const [piece, ...reste] = spritePieces(s, w * R, h * R, tilt)
+        expect(reste).toHaveLength(0)
+        // jamais etire : le morceau a le rapport de son image, au pixel pres
+        const [W, H] = dimensions(p.file)
+        expect(Math.abs(piece!.w / piece!.h - W / H) * H, p.file).toBeLessThan(1)
+        // le feutre centre sur l'oeil, de la hauteur que dit `aspect`
+        expect(piece!.x).toBeCloseTo(-piece!.w / 2, 9)
+        expect(piece!.y).toBeCloseTo(-piece!.h / 2, 9)
+        const f = spriteFelt(s, w * R, h * R, tilt)
+        expect(f.y / f.x).toBeCloseTo(s.aspect, 9)
+        // son plus grand cote est la largeur que la gelule inclinee occupe a l'ecran
+        const t = (Math.abs(tilt) * Math.PI) / 180
+        expect(2 * Math.max(f.x, f.y)).toBeCloseTo(w * R * Math.cos(t) + h * R * Math.sin(t), 9)
+      })
+    }
+    // les autres expressions gardent le patin generique
+    expect(spritePadsOf('neutre')).toBeNull()
+    expect(spritePadsOf('toString')).toBeNull()
+  })
+})
+
+describe('bibliotheque de feutre', () => {
+  it('chaque forme a la couleur de son feutre', () => {
+    expect(Object.keys(SHAPE_INKS).sort()).toEqual([...PLUSH_SHAPES].sort())
+    for (const hex of Object.values(SHAPE_INKS)) expect(hex).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('le moteur rend l\'inclinaison propre de chaque oeil', () => {
+    const colere = EXPRESSION_BY_ID.get('colere')!
+    const engine = new BotEngine(100, 'idle', null, colere)
+    const f = engine.sample(2)
+    expect(f.eyes.map((e) => e.tilt)).toEqual(colere.eyes.map((e) => e.tilt ?? 0))
   })
 })
 

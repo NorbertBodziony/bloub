@@ -5,6 +5,8 @@ import { PLUSH_CHARACTERS, PLUSH_SHAPES, PLUSH_STATES, PlushBot, type PlushState
 
 /** le visage propre au bot : celui du personnage, `neutre` pour une forme */
 const PROPRE = 'propre'
+/** pas de `color` : chaque forme prend celle de son feutre (`SHAPE_INKS`) */
+const FEUTRE = 'feutre'
 // 24 a 40 : les tailles des avatars d'openbot
 const TAILLES = [24, 32, 40, 46, 96, 200]
 
@@ -31,7 +33,7 @@ export default function Sandbox() {
   const [taille, setTaille] = createSignal(Number(params.get('taille')) || 96)
   const [etat, setEtat] = createSignal<PlushState>((params.get('etat') as PlushState | null) ?? 'idle')
   const [expression, setExpression] = createSignal(params.get('expression') ?? PROPRE)
-  const [couleur, setCouleur] = createSignal(params.get('couleur') ?? 'bleu')
+  const [couleur, setCouleur] = createSignal(params.get('couleur') ?? FEUTRE)
   const [fige, setFige] = createSignal(params.has('fige'))
   // `#yeux=1.25` : l'echelle des yeux d'un avatar petit ; `#pause` : arrete au repos, comme au survol
   const [yeux, setYeux] = createSignal(Number(params.get('yeux')) || 1)
@@ -113,6 +115,7 @@ export default function Sandbox() {
         <label style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
           couleur
           <select value={couleur()} onChange={(e) => setCouleur(e.currentTarget.value)}>
+            <option value={FEUTRE}>{FEUTRE}</option>
             <For each={COLORS}>{(c) => <option value={c.id}>{c.id}</option>}</For>
           </select>
           <input
@@ -165,7 +168,7 @@ export default function Sandbox() {
             <figure style={{ margin: 0 }} onMouseEnter={() => setSous(forme)} onMouseLeave={() => setSous(null)}>
               <PlushBot
                 shape={forme}
-                color={couleur()}
+                color={couleur() === FEUTRE ? undefined : couleur()}
                 size={taille()}
                 state={etat()}
                 expression={visage()}
