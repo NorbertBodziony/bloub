@@ -12,7 +12,10 @@ import {
   BALL,
   GENERIC_PAD,
   PLUSH_CHARACTER_BY_ID,
+  SHAPE_INKS,
+  SPRITE_PADS,
   shapeBody,
+  spritePadsOf,
   type PlushCharacterId,
   type PlushPad,
   type PlushShapeId,
@@ -44,7 +47,10 @@ export interface PlushBotProps {
   character?: PlushCharacterId
   /** une forme grise, teinte en `color` */
   shape?: PlushShapeId
-  /** un id du personnaliseur ou `#rrggbb` ; ignore pour un personnage */
+  /**
+   * un id du personnaliseur ou `#rrggbb` ; ignore pour un personnage. Sans lui, une forme
+   * prend la couleur de son feutre dans la bibliotheque (`SHAPE_INKS`).
+   */
   color?: string
   /**
    * `asleep` et `failed` imposent leur visage (yeux fermes ; la pose et l'inclinaison de
@@ -106,13 +112,14 @@ export default function PlushBot(props: PlushBotProps) {
   const character = createMemo(() => (props.character ? (PLUSH_CHARACTER_BY_ID.get(props.character) ?? null) : null))
   const href = (file: string) => (props.assetBase ? `${props.assetBase}${file}` : (ASSET_URLS[file] ?? ''))
 
+  const shape = createMemo(() => character()?.shape ?? props.shape ?? 'cercle')
   const ink = createMemo(() => {
     const c = character()
     if (c) return c.ink
-    const color = props.color ?? 'encre'
-    return COLOR_BY_ID.get(color)?.hex ?? (/^#[0-9a-f]{6}$/i.test(color) ? color : '#0a0a0c')
+    const defaut = SHAPE_INKS[shape() as PlushShapeId]
+    const color = props.color ?? defaut
+    return COLOR_BY_ID.get(color)?.hex ?? (/^#[0-9a-f]{6}$/i.test(color) ? color : defaut)
   })
-  const shape = createMemo(() => character()?.shape ?? props.shape ?? 'cercle')
   /*
    * Jamais `null` : le moteur passe d'un visage nul a un visage sans fondu (il n'a rien
    * depuis quoi glisser), la premiere expression demandee a une forme sauterait.
@@ -202,9 +209,15 @@ export default function PlushBot(props: PlushBotProps) {
     if (value === undefined) return cote().face ?? neutre
     return typeof value === 'string' ? (EXPRESSION_BY_ID.get(value) ?? neutre) : value
   })
-  // `failed` donne aux deux yeux le patin de l'oeil le plus ouvert, comme a son visage
-  const padsOf = (s: PlushState) => (s === 'failed' ? failedPads(cote().pads, cote().face ?? neutre) : cote().pads)
-  const pads = createMemo(() => padsOf(state()))
+  /*
+   * Les patins a l'ecran. `failed` donne aux deux yeux le patin de l'oeil le plus ouvert, comme
+   * a son visage. Une forme grise montre le dessin de son expression quand une gelule ne sait
+   * pas la faire (`SPRITE_PADS`) ; un personnage garde ses patins, ajustes sur sa capture.
+   */
+  const sprites = createMemo(() => (cote().face ? null : spritePadsOf(expression().id)))
+  const pads = createMemo(() =>
+    state() === 'failed' ? failedPads(cote().pads, cote().face ?? neutre) : (sprites() ?? cote().pads)
+  )
   /*
    * Les deux gelules de chaque patin, chargees d'avance : un oeil n'en montre qu'une, et passe a
    * l'autre quand une expression le fait passer de couche a debout. Pas encore chargee, elle
@@ -212,7 +225,12 @@ export default function PlushBot(props: PlushBotProps) {
    */
   const prechargees = new Set<HTMLImageElement>()
   createEffect(
-    () => cote().pads.flatMap((p) => [href(p.images.x), href(p.images.y)]).join('|'),
+    () =>
+      // une forme grise peut passer a tout moment a une expression dessinee : ses sprites aussi
+      [...cote().pads, ...(cote().face ? [] : Object.values(SPRITE_PADS).flat())]
+        .flatMap((p) => [href(p.images.x), href(p.images.y)])
+        .filter((url, i, all) => all.indexOf(url) === i)
+        .join('|'),
     (clef) => {
       if (typeof Image === 'undefined') return
       prechargees.clear()
@@ -295,14 +313,21 @@ export default function PlushBot(props: PlushBotProps) {
   const [zs, setZs] = createSignal<DotsTrack>(
     untrack(state) === 'asleep' ? { ...NO_DOTS, from: 1, on: true } : NO_DOTS
   )
-  // le fondu des patins a l'entree de `failed` et a sa sortie
+  /*
+   * Le fondu des patins : a l'entree de `failed` et a sa sortie, et quand une forme grise passe
+   * d'un dessin d'oeil a un autre (gelule ou sprite). Pas a un changement de corps : les yeux
+   * partent avec lui (`transition.ts`).
+   */
   const [padFade, setPadFade] = createSignal<PadFade>(NO_PAD_FADE)
-  createEffect(state, (s, previous) => {
-    if (!context || previous === undefined || (s === 'failed') === (previous === 'failed')) return
-    if (untrack(() => props.frozenAt) !== undefined) return
-    const avant = untrack(() => padsOf(previous))
-    setPadFade((fade) => padFadeToggle(fade, avant, context!.clock()))
-  })
+  createEffect(
+    () => ({ clef: `${state() === 'failed'}|${sprites()?.[0].file ?? ''}`, pads: pads() }),
+    (v, previous) => {
+      if (!context || previous === undefined || v.clef === previous.clef) return
+      if (untrack(() => props.frozenAt) !== undefined) return
+      context.hold(BotEngine.SHAPE_MORPH)
+      setPadFade((fade) => padFadeToggle(fade, previous.pads, context!.clock()))
+    }
+  )
   createEffect(state, (s) => {
     if (!context) return
     // ce qui entre avec l'etat (regard, « non », points, z, patins) court au plus ceci

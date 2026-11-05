@@ -31,6 +31,11 @@ export interface RenderedEye {
    * `somnolent`). `open` lui est egal sauf pendant un clignement, ou il descend en dessous
    */
   rest: number
+  /**
+   * l'inclinaison propre de l'oeil (`EyeCfg.tilt`, degres), deja composee dans `matrix` : un rendu
+   * dont le dessin porte deja sa pente (les yeux-sprites de la peluche) la retire
+   */
+  tilt: number
 }
 
 export interface BotFrame {
@@ -636,6 +641,7 @@ export class BotEngine {
           matrix: `matrix(${r2(ax)},${r2(ay * k)},${r2(cx2)},${r2(cy2 * k)},${r2(e.x * fit + (offX + decalage.x) * R)},${r2(e.y * fit + (offY + decalage.y) * R)})`,
           open: k,
           rest: blinkScale(cfg.open),
+          tilt: cfg.tilt ?? 0,
           alpha: pose.eyeAlpha * clamp(e.depth / 0.12)
         })
       }

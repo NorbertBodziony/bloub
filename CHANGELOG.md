@@ -5,6 +5,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-05
+
+### Added
+
+- Felt sprite eyes for the plush shapes. A capsule can't draw an arc, a chevron or a corner,
+  so on a grey shape the six expressions that need one (`heureux`, `hilare`, `colere`,
+  `fier`, `blase`, `somnolent`) show their own drawn felt eye. It stays upright, keeps its
+  proportions, and cross-fades in over `SHAPE_MORPH`.
+- `RenderedEye.tilt`: the eye's own tilt in degrees, already composed into `matrix`.
+- The felt gallery has a `feutre` colour, the default: each shape in its own ink.
+
+### Changed
+
+- The eleven plush shapes and the generic eye pad come from a new generated library
+  (`tools/peluche/fit/biblioteka.py`). The bodies are cleaner, and the pad is felt cut from
+  the library's own eyes.
+- **A `PlushBot` with a `shape` and no `color` now takes that shape's own colour**
+  (`SHAPE_INKS`, e.g. `cercle` is yellow and `pentagone` blue) instead of `encre`. To keep
+  the old look, pass `color="encre"`. Characters are unchanged.
+
 ## [0.6.4] — 2026-11-03
 
 ### Fixed

@@ -17,8 +17,14 @@ import { PlushBot } from '@norbert_bodziony/bloub/plush'
   eye pads baked into images. Their face is a real `BotExpression`, fitted on a capture
   of the reference avatars, so it is not in the expression catalogue.
 - **Eleven grey shapes**, one per customiser shape: a neutral grey body, tinted at
-  runtime to any colour (`color` takes a customiser id or `#rrggbb`). The eyes carry the
-  generic pad.
+  runtime to any colour (`color` takes a customiser id or `#rrggbb`). Without `color`, a
+  shape takes the colour its body was generated in (`SHAPE_INKS`), not `encre`. The eyes
+  carry the generic pad, or a felt sprite on the six expressions a capsule cannot draw
+  (below).
+
+Since 0.7.0 the shapes, the generic pad and the sprites all come from one generated
+library (`biblioteka-bloub`): eleven eyeless coloured bodies and sixteen white felt eye
+pairs, one per expression. `tools/peluche/fit/biblioteka.py` turns it into the assets.
 
 How those images were made, and how to make a new one, is in
 [tools/peluche/README.md](../tools/peluche/README.md).
@@ -183,6 +189,26 @@ coverages sum to one. No cut ever falls on an image's own edge: there, the image
 antialiasing doubled the cut's and left a line too, which is why the straight part is not a
 separate image.
 
+### Sprite eyes
+
+A capsule can't draw an arc (`heureux`, `fier`), a chevron (`hilare`), a corner (`colere`),
+a half oval (`blase`) or a U-shaped stroke (`somnolent`). On a grey shape, those six
+expressions show the library's own eye for that expression instead (`SPRITE_PADS`,
+`oeil-<expr>-<i>.webp`): one image per eye, in a single piece, never stretched. The other ten
+expressions keep the generic pad. The characters are unaffected: their face is their own.
+
+- **Size** (`spriteFelt`): the drawing already has its tilt, so it is drawn upright
+  (`layer.tsx` cancels the eye matrix's rotation with `rotate(-tilt)`, which is why
+  `RenderedEye` carries `tilt`). It takes the width the tilted capsule covers on screen,
+  `w·cos t + h·sin t`, and keeps its own proportions (`SPRITES`, measured by
+  `biblioteka.py`). If a drawing is taller than it is wide (`hilare`), that width becomes its
+  height instead; otherwise the chevrons went past the face. This rule was CHOSEN by
+  looking at all eleven shapes.
+- **Lids**: the lid mask is cut on the sprite's felt box, not on the capsule's.
+- **Change**: going from the pad to a sprite, or from one sprite to another, is the same
+  cross-fade as `failed` (`padFadeToggle`, over `SHAPE_MORPH`). The new eye fades in while
+  the expression morphs under it. All twelve sprites are preloaded with the bot.
+
 ### Blinks
 
 The engine blinks by squashing the eye vertically on screen (`blinkScale`, measured),
@@ -267,6 +293,10 @@ on the main thread.
 That is browser-only: on the server, a grey shape renders without a body until the client
 tints it.
 
+The default colour of each shape (`SHAPE_INKS`) is the median of its generated body's
+interior, before it was normalised to grey (`biblioteka.json`). Tinting a shape with its own
+ink gives back roughly the generated body.
+
 ## Images
 
 Each image is its own file, referenced by a literal
@@ -282,11 +312,12 @@ plush and checks the images it emits, and checks that the main entry carries non
 
 The eye pads are lit by `tools/peluche/fit/relief.py`; `fit/matiere.py` turns them into
 felt capsules, two per eye, 1.0 MB for the 24 (`tools/peluche/README.md`). A bot fetches
-its own four, about 170 kB.
+its own four, about 170 kB. A grey shape fetches its body, the two generic pads and the
+twelve sprites.
 
 ## The gallery
 
 `/felt.html` under `bun run dev` shows every character and every shape, with switchers for
-state, expression and colour. `#parcours` plays a sequence that includes changes 0.25 s
+state, expression and colour (`feutre`, the default, is the shape's own ink). `#parcours` plays a sequence that includes changes 0.25 s
 apart, to watch interrupted fades; `#fige&t=2.5` freezes one instant, and
 `window.__instant(t)` steps it for frame captures.
