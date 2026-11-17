@@ -5,6 +5,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-11-17
+
+### Fixed
+
+- With Solid 2.0.0, a `PlushBot` or a `BloubBot` no longer throws "Stale read from <Show>" while a
+  transition holds its blink, pad fade, notch or notification. Solid 2.0.0 throws when code reads
+  the accessor that `Show` gives its child after the condition is gone. `held` now reads the source
+  of the condition, which never throws, and keeps its last value as before. Release candidates of
+  Solid 2.0 are still supported.
+
 ## [0.6.4] — 2026-11-03
 
 ### Fixed

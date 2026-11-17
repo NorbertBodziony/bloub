@@ -572,8 +572,8 @@ export default function BloubBot(rawProps: BloubBotProps) {
             {(eye) => <path d={eye().d} transform={eye().matrix} opacity={eye().alpha} fill="#000" />}
           </For>
           <Show when={frame().notch}>
-            {(notchVisible) => {
-              const notch = held(notchVisible)
+            {(_notchVisible) => {
+              const notch = held(() => frame().notch)
               return <circle cx={notch().x} cy={notch().y} r={notch().r} fill="#000" />
             }}
           </Show>
@@ -634,8 +634,8 @@ export default function BloubBot(rawProps: BloubBotProps) {
             <Show when={!frame().dotsBehind}><g><Dots /></g></Show>
 
             <Show when={frame().notif}>
-              {(notifVisible) => {
-                const notif = held(notifVisible)
+              {(_notifVisible) => {
+                const notif = held(() => frame().notif)
                 return <circle cx={notif().x} cy={notif().y} r={notif().r} fill={NOTIF_BLUE} />
               }}
             </Show>

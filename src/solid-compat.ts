@@ -33,14 +33,18 @@ export function onMount(effect: () => void | (() => void)): void {
 }
 
 /**
- * La derniere valeur non nulle d'un accesseur de `Show`. Pendant une transition, Solid garde
- * l'ancien enfant en vie jusqu'a la validation : ses effets relisent l'accesseur, qui rend deja
+ * La derniere valeur non nulle de la condition d'un `Show`. Pendant une transition, Solid garde
+ * l'ancien enfant en vie jusqu'a la validation, et ses effets relisent la valeur, qui est deja
  * `null`. Lire un champ dessus levait une TypeError et figeait toute la reactivite.
+ *
+ * Passer la SOURCE de la condition, jamais l'accesseur que `Show` donne a son enfant : depuis
+ * Solid 2.0.0, relire cet accesseur pendant que l'enfant est garde leve « Stale read from <Show> »,
+ * que la page attrape comme une erreur.
  */
-export function held<T>(accessor: Accessor<T | null | undefined | false>): Accessor<T> {
+export function held<T>(source: Accessor<T | null | undefined | false>): Accessor<T> {
   let last: T
   return () => {
-    const value = accessor()
+    const value = source()
     if (value != null && value !== false) last = value
     return last
   }
