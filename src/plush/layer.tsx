@@ -53,6 +53,8 @@ export interface PlushLayerProps {
  */
 export default function PlushLayer(props: PlushLayerProps) {
   const frame = () => props.context.frame()
+  // la pastille, lue a la source : `held` ne relit jamais l'accesseur de `Show`
+  const notifSource = () => (props.notif ? frame().notif : null)
 
   // l'etape de la transition, relue a chaque image du bot
   const etape = createMemo<Rendu>(() => {
@@ -200,8 +202,8 @@ export default function PlushLayer(props: PlushLayerProps) {
                      * verticalement a l'ecran autour du centre de l'oeil. Un `scale(1,0)` ne peint rien.
                      */}
                     <Show when={paupiere()}>
-                      {(paupiereVisible) => {
-                        const l = held(paupiereVisible)
+                      {(_paupiereVisible) => {
+                        const l = held(paupiere)
                         const cx = () => ox() + l().x
                         const cy = () => oy() + l().y
                         return (
@@ -231,8 +233,8 @@ export default function PlushLayer(props: PlushLayerProps) {
                     </Show>
                     <g transform={transform()} opacity={eye().alpha}>
                       <Show when={ancien()}>
-                        {(ancienVisible) => {
-                          const p = held(ancienVisible)
+                        {(_ancienVisible) => {
+                          const p = held(ancien)
                           const pieces = createMemo(() => padPieces(p(), taille().w, taille().h))
                           return patin(p, pieces, () => (1 - sommeil()) * (1 - fondu()))
                         }}
@@ -301,9 +303,9 @@ export default function PlushLayer(props: PlushLayerProps) {
         }}
       </For>
 
-      <Show when={props.notif ? frame().notif : null}>
-        {(notifVisible) => {
-          const notif = held(notifVisible)
+      <Show when={notifSource()}>
+        {(_notifVisible) => {
+          const notif = held(notifSource)
           return (
             <image
               href={props.notif!}
