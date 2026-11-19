@@ -599,7 +599,14 @@ export class BotEngine {
       cy: pose.sil.cy + offY,
       sy: pose.sil.sy * life.breath
     }
-    const bodyPath = closedPath(toPoints(sil, R, this.pts))
+    /*
+     * Le contour est trace a la PREMIERE lecture : 64 cubiques, c'est le plus gros cout d'une
+     * image, et un rendu qui peint le corps lui-meme (la peluche) ne le lit jamais. Les rayons
+     * sont copies : `pose.sil.radii` peut etre un tampon reutilise a l'image suivante.
+     */
+    const silhouette: Silhouette = { ...sil, radii: sil.radii.slice() }
+    let contour: string | undefined
+    const tracer = () => (contour ??= closedPath(toPoints(silhouette, R, this.pts)))
 
     // --- yeux -------------------------------------------------------------
     // Les yeux vivent sur une sphere de rayon 1 ; des que la silhouette n'est
@@ -654,7 +661,9 @@ export class BotEngine {
     const notch = pose.notif ? { x: nx, y: ny, r: pose.notif.notch * R } : null
 
     return {
-      bodyPath,
+      get bodyPath() {
+        return tracer()
+      },
       bodyAlpha: pose.bodyAlpha,
       eyes,
       dots,

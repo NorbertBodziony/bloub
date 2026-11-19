@@ -21,6 +21,7 @@ import { COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID, mixHex } from '
 import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles.js'
 import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
 import { STATE_BY_ID, type StateId } from '../bot/states.js'
+import { memeContenu } from '../egal.js'
 
 function watch<T>(
   source: Accessor<T>,
@@ -203,6 +204,14 @@ export default function BloubBot(rawProps: BloubBotProps) {
     frameAt = seconds
     setFrame(engine.sample(seconds))
   }
+  /*
+   * Les listes de l'image, comparees par contenu : `frame` change a chaque image (`layer` y lit
+   * l'horloge), mais des courants ou des points absents, ou qui n'ont pas bouge, ne doivent pas
+   * relancer les lignes de leur `For`.
+   */
+  const yeux = createMemo(() => frame().eyes, { equals: memeContenu })
+  const courants = createMemo(() => frame().arcs, { equals: memeContenu })
+  const points = createMemo(() => frame().dots, { equals: memeContenu })
   const uid = createUniqueId()
   const maskId = `bot-mask-${uid}`
 
@@ -542,7 +551,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
    * L'ordre du document est le meme, ce dont depend `matricesDesYeux`.
    */
   const Dots = () => (
-    <For each={frame().dots} keyed={false}>
+    <For each={points()} keyed={false}>
       {(dot) => <Dynamic component={dot().d ? 'path' : 'circle'} {...dotAttrs(dot())} />}
     </For>
   )
@@ -559,27 +568,30 @@ export default function BloubBot(rawProps: BloubBotProps) {
       style={props.style}
     >
       <defs>
-        <mask
-          id={maskId}
-          maskUnits="userSpaceOnUse"
-          x={-DEMI_VIEWBOX}
-          y={-DEMI_VIEWBOX}
-          width={DEMI_VIEWBOX * 2}
-          height={DEMI_VIEWBOX * 2}
-        >
-          <path d={frame().bodyPath} fill="#fff" />
-          <For each={frame().eyes} keyed={false}>
-            {(eye) => <path d={eye().d} transform={eye().matrix} opacity={eye().alpha} fill="#000" />}
-          </For>
-          <Show when={frame().notch}>
-            {(_notchVisible) => {
-              const notch = held(() => frame().notch)
-              return <circle cx={notch().x} cy={notch().y} r={notch().r} fill="#000" />
-            }}
-          </Show>
-        </mask>
+        {/* le masque ne sert qu'au rendu plat : un `layer` peint le corps et les yeux lui-meme */}
+        <Show when={!props.layer}>
+          <mask
+            id={maskId}
+            maskUnits="userSpaceOnUse"
+            x={-DEMI_VIEWBOX}
+            y={-DEMI_VIEWBOX}
+            width={DEMI_VIEWBOX * 2}
+            height={DEMI_VIEWBOX * 2}
+          >
+            <path d={frame().bodyPath} fill="#fff" />
+            <For each={yeux()} keyed={false}>
+              {(eye) => <path d={eye().d} transform={eye().matrix} opacity={eye().alpha} fill="#000" />}
+            </For>
+            <Show when={frame().notch}>
+              {(_notchVisible) => {
+                const notch = held(() => frame().notch)
+                return <circle cx={notch().x} cy={notch().y} r={notch().r} fill="#000" />
+              }}
+            </Show>
+          </mask>
+        </Show>
 
-        <For each={frame().arcs} keyed={false}>
+        <For each={courants()} keyed={false}>
           {(arc) => (
             <linearGradient
               id={`${uid}-${arc().id}`}
@@ -600,7 +612,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
       </defs>
 
       <g fill="none" stroke-linecap="round">
-        <For each={frame().arcs} keyed={false}>
+        <For each={courants()} keyed={false}>
           {(arc) => (
             <path
               d={arc().back}
@@ -647,7 +659,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
       </Show>
 
       <g fill="none" stroke-linecap="round">
-        <For each={frame().arcs} keyed={false}>
+        <For each={courants()} keyed={false}>
           {(arc) => (
             <path
               d={arc().front}

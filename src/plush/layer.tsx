@@ -7,6 +7,7 @@ import { padExtent, padPieces, type PadPiece } from './slices.js'
 import { dotsVisibility, faceGrowth, lidMask, matrixOf, restCapsule, unsquash, padFadeLevel, sleepZs, thinkingDots, type DotsTrack, type PadFade } from './motion.js'
 import { REPOS_APRES, rendu, type PlushTransition, type Rendu } from './transition.js'
 import { held } from '../solid-compat.js'
+import { memeContenu } from '../egal.js'
 
 /** la boule occupe 80 % de son image (`forme.py --boule`) */
 const BOULE = 0.8
@@ -53,6 +54,8 @@ export interface PlushLayerProps {
  */
 export default function PlushLayer(props: PlushLayerProps) {
   const frame = () => props.context.frame()
+  // les yeux, compares par contenu : immobiles, ils ne relancent ni leurs lignes ni leurs patins
+  const yeux = createMemo(() => frame().eyes, { equals: memeContenu })
   // la pastille, lue a la source : `held` ne relit jamais l'accesseur de `Show`
   const notifSource = () => (props.notif ? frame().notif : null)
 
@@ -78,14 +81,21 @@ export default function PlushLayer(props: PlushLayerProps) {
     return sx === 1 && sy === 1 ? undefined : `scale(${sx},${sy})`
   }
 
-  const dots = createMemo(() => {
-    frame()
-    return thinkingDots(props.dots, props.context.time())
-  })
-  const zs = createMemo(() => {
-    frame()
-    return sleepZs(props.zs, props.context.time())
-  })
+  // hors de `thinking` et d'`asleep`, des listes vides a chaque image : par contenu, elles ne relancent rien
+  const dots = createMemo(
+    () => {
+      frame()
+      return thinkingDots(props.dots, props.context.time())
+    },
+    { equals: memeContenu }
+  )
+  const zs = createMemo(
+    () => {
+      frame()
+      return sleepZs(props.zs, props.context.time())
+    },
+    { equals: memeContenu }
+  )
   const fondu = createMemo(() => {
     frame()
     return props.padFade ? padFadeLevel(props.padFade, props.context.clock()) : 1
@@ -101,7 +111,7 @@ export default function PlushLayer(props: PlushLayerProps) {
     const k = props.eyeScale ?? 1
     if (k === 1) return null
     return faceGrowth(
-      frame().eyes.map((eye, i) => {
+      yeux().map((eye, i) => {
         const pad = props.pads[i] ?? props.pads[0]
         const m = matrixOf(eye.matrix)
         m[4] = (m[4] ?? 0) + pad.dx * RAYON
@@ -139,7 +149,7 @@ export default function PlushLayer(props: PlushLayerProps) {
          * paupieres de fourrure se ferment dessus (`lidMask`). Mi-clos au repos (`somnolent`), il
          * est une gelule plus courte (`restCapsule`).
          */}
-        <For each={frame().eyes} keyed={false}>
+        <For each={yeux()} keyed={false}>
           {(eye, i) => {
             const pad = () => props.pads[i] ?? props.pads[0]
             // le patin d'avant, tant qu'il est un autre et que le fondu court
@@ -148,16 +158,22 @@ export default function PlushLayer(props: PlushLayerProps) {
               const p = from?.[i] ?? from?.[0]
               return p && p.file !== pad().file && fondu() < 1 ? p : null
             }
-            const m = createMemo(() => matrixOf(eye().matrix))
+            // par contenu : un oeil qui ne change que d'opacite garde sa matrice, sa gelule et ses morceaux
+            const m = createMemo(() => matrixOf(eye().matrix), { equals: memeContenu })
             // la gelule dessinee : celle de l'oeil, raccourcie sur une expression mi-close (`somnolent`)
-            const taille = createMemo(() => restCapsule(m(), eye().open, eye().rest, eye().w, eye().h))
-            const morceaux = createMemo(() => padPieces(pad(), taille().w, taille().h))
+            const taille = createMemo(() => restCapsule(m(), eye().open, eye().rest, eye().w, eye().h), {
+              equals: memeContenu
+            })
+            const morceaux = createMemo(() => padPieces(pad(), taille().w, taille().h), { equals: memeContenu })
             const correction = createMemo(() => unsquash(m(), eye().open))
             // les paupieres : seulement pendant un clignement
-            const paupiere = createMemo(() => {
-              const gelule = { x: taille().w / 2, y: taille().h / 2 }
-              return lidMask(m(), eye().open, eye().rest, gelule, padExtent(morceaux()))
-            })
+            const paupiere = createMemo(
+              () => {
+                const gelule = { x: taille().w / 2, y: taille().h / 2 }
+                return lidMask(m(), eye().open, eye().rest, gelule, padExtent(morceaux()))
+              },
+              { equals: memeContenu }
+            )
             const id = `${props.context.uid}-paupiere-${i}`
             // le centre de l'oeil dans le groupe : le decalage du patin et le recul du visage agrandi
             const ox = () => pad().dx * RAYON + (recul()?.[i]?.x ?? 0)
@@ -235,7 +251,7 @@ export default function PlushLayer(props: PlushLayerProps) {
                       <Show when={ancien()}>
                         {(_ancienVisible) => {
                           const p = held(ancien)
-                          const pieces = createMemo(() => padPieces(p(), taille().w, taille().h))
+                          const pieces = createMemo(() => padPieces(p(), taille().w, taille().h), { equals: memeContenu })
                           return patin(p, pieces, () => (1 - sommeil()) * (1 - fondu()))
                         }}
                       </Show>

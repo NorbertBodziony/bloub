@@ -5,6 +5,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.6] — 2026-11-20
+
+### Changed
+
+- An animated `PlushBot` or `BloubBot` uses about 70 % less CPU per frame. The eyes, arcs, dots,
+  eye matrices, capsules, pad pieces and lids are now compared by content, so a list or an eye
+  that did not move does not render its rows again. The body outline is built only when it is
+  read, and the plush, which paints its own body, never reads it. The `<mask>` that only the flat
+  rendering uses is no longer made under a `layer`. The output does not change: 5,832 reference
+  frames (plush and flat, all states) are byte-identical, apart from the unused mask.
+
 ## [0.6.5] — 2026-11-17
 
 ### Fixed
