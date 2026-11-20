@@ -22,11 +22,8 @@ import { blockAt, defaultCycle, offsetOf, type Block } from '../bot/cycles.js'
 import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
 import { STATE_BY_ID, type StateId } from '../bot/states.js'
 import { memeContenu } from '../egal.js'
-
-/** sous ce delai avant la prochaine image a dessiner, la boucle ne dort pas (s) */
-const SOMMEIL_MIN = 0.012
-/** le reveil precede l'image de cette marge, pour tomber sur la bonne image de l'ecran (s) */
-const REVEIL_AVANCE = 0.008
+import { abonnerCadence } from './cadence.js'
+import { FRACTION_DE_PIXEL, mesurerPixels, yeuxStables } from './sous-pixel.js'
 
 function watch<T>(
   source: Accessor<T>,
@@ -205,9 +202,24 @@ export default function BloubBot(rawProps: BloubBotProps) {
   const [frame, setFrame] = createSignal<BotFrame>(engine.sample(frameAt), {
     equals: false
   })
-  function draw(seconds: number) {
+  /** les unites du viewBox dans un pixel physique de l'ecran ; 0 tant que la taille est inconnue */
+  let unitesParPixel = 0
+  let publiee = untrack(frame)
+  /*
+   * `boucle` : une image de la boucle. Ses yeux restent ceux
+   * d'avant tant qu'ils ne bougent pas d'une fraction de pixel (`sous-pixel.ts`). Le reste de
+   * l'image suit toujours l'horloge : les points, les « z » et les transitions d'un rendu
+   * lisent `frame` pour avancer. Une image figee ou demandee (`renderAt`) est toujours exacte.
+   */
+  function draw(seconds: number, boucle = false) {
     frameAt = seconds
-    setFrame(engine.sample(seconds))
+    let suivante = engine.sample(seconds)
+    if (boucle) {
+      const eyes = yeuxStables(publiee.eyes, suivante.eyes, unitesParPixel * FRACTION_DE_PIXEL)
+      if (eyes !== suivante.eyes) suivante = { ...suivante, eyes }
+    }
+    publiee = suivante
+    setFrame(suivante)
   }
   /*
    * Les listes de l'image, comparees par contenu : `frame` change a chaque image (`layer` y lit
@@ -221,11 +233,8 @@ export default function BloubBot(rawProps: BloubBotProps) {
   const maskId = `bot-mask-${uid}`
 
   let svg!: SVGSVGElement
-  let raf = 0
-  /** `raf` tient alors un `setTimeout` : sous la bride `fps`, la boucle dort entre deux images */
-  let sleeping = false
-  /** instant de la derniere image DESSINEE, pour la bride `fps` */
-  let drawn = -Infinity
+  /** le desabonnement de la cadence partagee, tant que la boucle tourne */
+  let desabonner: (() => void) | null = null
   let nextAt = Infinity
   let last = 0
   let clock = start.phase
@@ -342,38 +351,15 @@ export default function BloubBot(rawProps: BloubBotProps) {
   }
 
   /*
-   * Sous la bride `fps`, la boucle ne demande pas chaque image de l'ecran : quand la prochaine
-   * image a dessiner est a plus de `SOMMEIL_MIN`, elle dort, et se reveille `REVEIL_AVANCE`
-   * avant pour reprendre sur `requestAnimationFrame`. Le dessin reste cale sur l'ecran, et le
-   * navigateur n'execute plus un rappel vide a chaque image sautee.
+   * La bride `fps` et le sommeil entre deux images vivent dans `cadence.ts`, communs a tous
+   * les bots de la meme bride : `tick` n'est appele que pour une image a dessiner.
    */
-  function schedule(wait: number) {
-    sleeping = wait > SOMMEIL_MIN
-    raf = sleeping ? window.setTimeout(wake, (wait - REVEIL_AVANCE) * 1000) : requestAnimationFrame(tick)
-  }
-
-  function wake() {
-    sleeping = false
-    raf = requestAnimationFrame(tick)
-  }
-
   function tick(ms: number) {
     const budget = props.fps && props.fps > 0 ? 1 / props.fps : 0
     // un sommeil sous la bride dure jusqu'a `budget` : il ne compte pas comme une longue absence
     const dt = last ? Math.min((ms - last) / 1000, 0.064 + budget) : 0
     last = ms
     clock += dt
-
-    /*
-     * L'horloge avance toujours, le dessin non : une image sautee ne fait pas
-     * perdre de temps a l'animation, elle la rend seulement moins souvent. La
-     * comparaison porte sur l'horloge du bot et pas sur `ms`, pour que la pause
-     * automatique ne compte pas comme du retard a rattraper.
-     */
-    const early = clock - drawn < budget
-    schedule(early ? budget - (clock - drawn) : budget)
-    if (early) return
-    drawn = clock
 
     if (playing()) {
       if (clock >= nextAt && props.cycle.length) goToBlock((block() + 1) % props.cycle.length)
@@ -382,7 +368,7 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
     if (props.follow) aim()
     else if (props.gaze) scriptedGaze(props.gaze)
-    draw(clock)
+    draw(clock, true)
     if (props.paused && !props.follow && clock >= heldUntil && engine.quiet(clock)) setStirring(false)
   }
 
@@ -484,18 +470,14 @@ export default function BloubBot(rawProps: BloubBotProps) {
    * provoquerait.
    */
   function run() {
-    if (raf || typeof requestAnimationFrame === 'undefined') return
+    if (desabonner || typeof requestAnimationFrame === 'undefined') return
     last = 0
-    sleeping = false
-    raf = requestAnimationFrame(tick)
+    desabonner = abonnerCadence(props.fps, tick)
   }
 
   function halt() {
-    if (!raf) return
-    if (sleeping) clearTimeout(raf)
-    else if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf)
-    sleeping = false
-    raf = 0
+    desabonner?.()
+    desabonner = null
   }
 
   const [onscreen, setOnscreen] = createSignal(true)
@@ -512,10 +494,11 @@ export default function BloubBot(rawProps: BloubBotProps) {
       mounted() &&
       props.frozenAt === undefined &&
       (!props.paused || props.follow || stirring()) &&
-      (!props.autoPause || (onscreen() && shown())),
-    (awake) => {
-      if (awake) run()
-      else halt()
+      (!props.autoPause || (onscreen() && shown())) &&
+      (props.fps ?? 0),
+    (bride) => {
+      halt()
+      if (bride !== false) run()
     }
   )
 
@@ -542,11 +525,15 @@ export default function BloubBot(rawProps: BloubBotProps) {
             if (latest) setOnscreen(latest.isIntersecting)
           })
     spy?.observe(svg)
+    const taille = mesurerPixels(svg, (largeur) => {
+      unitesParPixel = largeur > 0 ? (DEMI_VIEWBOX * 2) / largeur : 0
+    })
     setMounted(true)
 
     return () => {
       document.removeEventListener('visibilitychange', sync)
       spy?.disconnect()
+      taille?.disconnect()
     }
   })
 

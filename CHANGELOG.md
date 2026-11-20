@@ -5,6 +5,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.8] — 2026-11-20
+
+### Changed
+
+- All bots with the same `fps` now share one frame loop and draw on the same display frames.
+  Before, each bot had its own loop, so bots mounted at different times drew on different
+  frames, and the page did style, layout and paint on almost every display frame. Each bot keeps
+  its own clock and phase; only the time of the draw is shared.
+- While the eyes drift slowly (`thinking`, a resting gaze), a loop frame keeps the last published
+  eyes until a point of an eye has moved by 1/32 of a physical screen pixel. The other parts of
+  the frame (dots, "z", transitions) still follow the clock. The eyes are never more than 1/32 of
+  a screen pixel from the engine. A frozen frame, `renderAt`, server rendering and an element
+  with an unknown size are exact. In OpenBot, with 5 streaming agents, this cut app CPU by 16 %
+  and GPU CPU by 26 %.
+
 ## [0.6.7] — 2026-11-20
 
 ### Changed
