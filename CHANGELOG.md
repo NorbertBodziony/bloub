@@ -5,6 +5,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.7] — 2026-11-20
+
+### Changed
+
+- With `fps`, the frame loop no longer requests every display frame. When the next frame to draw
+  is more than 12 ms away, the loop waits on a timer and wakes 8 ms early to go back to
+  `requestAnimationFrame`. The drawn frames and their timing do not change; the browser no longer
+  runs an empty callback for each skipped frame. OpenBot applied this as a patch to the built
+  package before.
+- The time step of one frame can now be as long as the `fps` interval plus 64 ms (before: 64 ms).
+  This keeps the animation at the correct speed when `fps` is less than about 15.
+
 ## [0.6.6] — 2026-11-20
 
 ### Changed
