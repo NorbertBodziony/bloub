@@ -23,6 +23,11 @@ import { DEMI_VIEWBOX, RAYON } from '../bot/repere.js'
 import { STATE_BY_ID, type StateId } from '../bot/states.js'
 import { memeContenu } from '../egal.js'
 
+/** sous ce delai avant la prochaine image a dessiner, la boucle ne dort pas (s) */
+const SOMMEIL_MIN = 0.012
+/** le reveil precede l'image de cette marge, pour tomber sur la bonne image de l'ecran (s) */
+const REVEIL_AVANCE = 0.008
+
 function watch<T>(
   source: Accessor<T>,
   effect: (value: T, previous: T | undefined) => void,
@@ -217,6 +222,8 @@ export default function BloubBot(rawProps: BloubBotProps) {
 
   let svg!: SVGSVGElement
   let raf = 0
+  /** `raf` tient alors un `setTimeout` : sous la bride `fps`, la boucle dort entre deux images */
+  let sleeping = false
   /** instant de la derniere image DESSINEE, pour la bride `fps` */
   let drawn = -Infinity
   let nextAt = Infinity
@@ -334,9 +341,26 @@ export default function BloubBot(rawProps: BloubBotProps) {
     document.removeEventListener('pointerleave', onPointerLeave)
   }
 
-  function tick(ms: number) {
+  /*
+   * Sous la bride `fps`, la boucle ne demande pas chaque image de l'ecran : quand la prochaine
+   * image a dessiner est a plus de `SOMMEIL_MIN`, elle dort, et se reveille `REVEIL_AVANCE`
+   * avant pour reprendre sur `requestAnimationFrame`. Le dessin reste cale sur l'ecran, et le
+   * navigateur n'execute plus un rappel vide a chaque image sautee.
+   */
+  function schedule(wait: number) {
+    sleeping = wait > SOMMEIL_MIN
+    raf = sleeping ? window.setTimeout(wake, (wait - REVEIL_AVANCE) * 1000) : requestAnimationFrame(tick)
+  }
+
+  function wake() {
+    sleeping = false
     raf = requestAnimationFrame(tick)
-    const dt = last ? Math.min((ms - last) / 1000, 0.064) : 0
+  }
+
+  function tick(ms: number) {
+    const budget = props.fps && props.fps > 0 ? 1 / props.fps : 0
+    // un sommeil sous la bride dure jusqu'a `budget` : il ne compte pas comme une longue absence
+    const dt = last ? Math.min((ms - last) / 1000, 0.064 + budget) : 0
     last = ms
     clock += dt
 
@@ -346,8 +370,9 @@ export default function BloubBot(rawProps: BloubBotProps) {
      * comparaison porte sur l'horloge du bot et pas sur `ms`, pour que la pause
      * automatique ne compte pas comme du retard a rattraper.
      */
-    const budget = props.fps && props.fps > 0 ? 1 / props.fps : 0
-    if (clock - drawn < budget) return
+    const early = clock - drawn < budget
+    schedule(early ? budget - (clock - drawn) : budget)
+    if (early) return
     drawn = clock
 
     if (playing()) {
@@ -461,12 +486,15 @@ export default function BloubBot(rawProps: BloubBotProps) {
   function run() {
     if (raf || typeof requestAnimationFrame === 'undefined') return
     last = 0
+    sleeping = false
     raf = requestAnimationFrame(tick)
   }
 
   function halt() {
     if (!raf) return
-    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf)
+    if (sleeping) clearTimeout(raf)
+    else if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf)
+    sleeping = false
     raf = 0
   }
 

@@ -82,6 +82,7 @@ describe('BloubBot Solid', () => {
   })
 
   it('la bride fps dessine moins souvent que la cadence de l\'ecran', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const horloge = horlogeManuelle()
     const host = document.createElement('div')
     const onElapsedChange = vi.fn()
@@ -99,12 +100,71 @@ describe('BloubBot Solid', () => {
     await Promise.resolve()
 
     // Neuf images d'un ecran a 60 Hz : a 30 par seconde, une sur deux suffit.
-    for (let image = 1; image <= 9; image += 1) horloge.avance(image * 16)
+    // Entre deux images dessinees la boucle dort : le minuteur la rend a l'ecran.
+    for (let image = 1; image <= 9; image += 1) {
+      vi.advanceTimersByTime(16)
+      horloge.avance(image * 16)
+    }
 
+    expect(onElapsedChange.mock.calls.length).toBeGreaterThan(2)
     expect(onElapsedChange.mock.calls.length).toBeLessThan(6)
-    expect(onElapsedChange).toHaveBeenCalled()
 
     dispose()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('sous la bride fps, la boucle dort au lieu de demander chaque image', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const horloge = horlogeManuelle()
+    const host = document.createElement('div')
+    const dispose = render(() => <BloubBot cycle={defaultCycle().blocks} playing fps={30} />, host)
+    await Promise.resolve()
+
+    horloge.avance(16)
+    horloge.avance(32)
+    // une image vient d'etre dessinee : rien n'est demande a l'ecran avant le reveil
+    expect(horloge.tourne).toBe(false)
+    vi.advanceTimersByTime(30)
+    expect(horloge.tourne).toBe(true)
+
+    // sans bride, chaque image de l'ecran est demandee
+    dispose()
+    const libre = render(() => <BloubBot cycle={defaultCycle().blocks} playing />, host)
+    await Promise.resolve()
+    horloge.avance(16)
+    horloge.avance(32)
+    expect(horloge.tourne).toBe(true)
+
+    libre()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('sous une bride lente, le sommeil entre deux images ne ralentit pas l\'animation', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const horloge = horlogeManuelle()
+    const host = document.createElement('div')
+    const onElapsedChange = vi.fn()
+    const dispose = render(
+      () => <BloubBot cycle={[{ state: 'idle', duration: 100 }]} playing fps={5} onElapsedChange={onElapsedChange} />,
+      host
+    )
+    await Promise.resolve()
+
+    // a 5 images par seconde, la boucle dort 200 ms entre deux images
+    for (let image = 0; image <= 10; image += 1) {
+      vi.advanceTimersByTime(200)
+      horloge.avance(1000 + image * 200)
+    }
+
+    // dix sommeils de 200 ms : pres de 2 s d'animation, a une image pres (l'arrondi peut en reporter une)
+    const ecoule = onElapsedChange.mock.lastCall?.[0] ?? 0
+    expect(ecoule).toBeGreaterThan(1.7)
+    expect(ecoule).toBeLessThan(2.1)
+
+    dispose()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
