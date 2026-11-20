@@ -141,6 +141,61 @@ describe('BloubBot Solid', () => {
     vi.unstubAllGlobals()
   })
 
+  it('des bots de la meme bride dessinent sur les memes images, avec une seule demande a l\'ecran', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let demandes = 0
+    let attendue: FrameRequestCallback | null = null
+    vi.stubGlobal('requestAnimationFrame', (rappel: FrameRequestCallback) => {
+      demandes += 1
+      attendue = rappel
+      return demandes
+    })
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      attendue = null
+    })
+    const avance = (ms: number) => {
+      const rappel = attendue
+      attendue = null
+      rappel?.(ms)
+    }
+    const host = document.createElement('div')
+    const images: Array<[string, number]> = []
+    let instant = 0
+    const premier = render(
+      () => <BloubBot cycle={defaultCycle().blocks} playing fps={30} onElapsedChange={() => images.push(['a', instant])} />,
+      host
+    )
+    await Promise.resolve()
+    instant = 16
+    avance(16)
+    await Promise.resolve()
+    const second = render(
+      () => <BloubBot cycle={defaultCycle().blocks} playing fps={30} onElapsedChange={() => images.push(['b', instant])} />,
+      host
+    )
+    await Promise.resolve()
+    images.length = 0
+    const avant = demandes
+
+    for (let image = 2; image <= 12; image += 1) {
+      vi.advanceTimersByTime(16)
+      instant = image * 16
+      avance(instant)
+      await Promise.resolve()
+    }
+
+    const instantsDe = (bot: string) => images.filter(([qui]) => qui === bot).map(([, quand]) => quand)
+    expect(instantsDe('a').length).toBeGreaterThanOrEqual(3)
+    expect(instantsDe('b')).toEqual(instantsDe('a'))
+    expect(demandes - avant).toBeLessThanOrEqual(11)
+
+    premier()
+    second()
+    expect(attendue).toBe(null)
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
   it('sous une bride lente, le sommeil entre deux images ne ralentit pas l\'animation', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const horloge = horlogeManuelle()
