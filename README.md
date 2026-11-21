@@ -147,8 +147,7 @@ import { PlushBot } from '@norbert_bodziony/bloub/plush'
 ```
 
 A felt plush version of the bot, in its own entry so its code and images stay out of
-the main bundle. Six baked characters, or 11 of the 14 shapes in any colour
-(`fantome`, `meduse` and `poulpe` have no felt body yet). Only the
+the main bundle. Six baked characters, or any of the 14 shapes in any colour. Only the
 eyes move: `state` is one of `idle`, `wink`, `wide`, `thinking`, `notify`, `asleep`
 and `failed`, and `expression` takes any of the 16 rest faces. Every change, even inside a fade, blends
 with the engine's own timings. When the body changes (shape, character or colour), it

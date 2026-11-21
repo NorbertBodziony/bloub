@@ -33,10 +33,12 @@ const sortie = SHAPES.map((forme) => {
   const engine = new BotEngine(R, 'idle', forme.radii, null)
   const frame = instantOuvert(engine)
   const pts = contour(frame.bodyPath, R)
-  const d = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${(CX + x * ECHELLE).toFixed(1)} ${(CY + y * ECHELLE).toFixed(1)}`).join('') + 'Z'
+  // le chemin du moteur lui-meme, courbes comprises : relier ses extremites par des
+  // segments facettait les bosses des ourlets (`fantome`, `meduse`, `poulpe`), et la
+  // generation recopie les facettes. `formes.json` garde les points, ce que lit le recalage.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${LARGEUR}" height="${HAUTEUR}">
 <rect width="100%" height="100%" fill="#141414"/>
-<path d="${d}" fill="${GRIS}"/>
+<path d="${frame.bodyPath}" transform="translate(${CX} ${CY}) scale(${ECHELLE / R})" fill="${GRIS}"/>
 <circle cx="1290" cy="512" r="${0.3 * ECHELLE}" fill="${GRIS}"/>
 </svg>`
   writeFileSync(join(dossier, `${forme.id}.svg`), svg)

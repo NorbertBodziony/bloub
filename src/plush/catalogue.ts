@@ -31,6 +31,9 @@ export type PlushShapeId = Extract<
   | 'carre'
   | 'losange'
   | 'pentagone'
+  | 'fantome'
+  | 'meduse'
+  | 'poulpe'
 >
 
 export const PLUSH_SHAPES: readonly PlushShapeId[] = [
@@ -44,7 +47,10 @@ export const PLUSH_SHAPES: readonly PlushShapeId[] = [
   'goutte',
   'carre',
   'losange',
-  'pentagone'
+  'pentagone',
+  'fantome',
+  'meduse',
+  'poulpe'
 ]
 
 /**
@@ -55,7 +61,7 @@ export const PLUSH_SHAPES: readonly PlushShapeId[] = [
  * sans passer ici fasse echouer `plush.test.ts`. Le jour ou son corps arrive, elle passe
  * de cette liste a `PLUSH_SHAPES`.
  */
-export const PLUSH_PENDING: readonly Exclude<ShapeId, PlushShapeId>[] = ['fantome', 'meduse', 'poulpe']
+export const PLUSH_PENDING: readonly Exclude<ShapeId, PlushShapeId>[] = []
 
 /**
  * Les etats d'une peluche : ceux qui GARDENT le corps. Une peluche ne devient pas un point
