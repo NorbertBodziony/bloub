@@ -168,7 +168,10 @@ export default {
     triangle: 'Triangle',
     hexagone: 'Hexagone',
     nuage: 'Nuage',
-    goutte: 'Goutte'
+    goutte: 'Goutte',
+    fantome: 'Fantôme',
+    meduse: 'Méduse',
+    poulpe: 'Poulpe'
   },
 
   colors: {

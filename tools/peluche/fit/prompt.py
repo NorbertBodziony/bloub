@@ -19,6 +19,9 @@ NOMS = {
     'carre': 'rounded square',
     'losange': 'rounded diamond',
     'pentagone': 'rounded pentagon',
+    'fantome': 'ghost-shaped blob with a scalloped bottom hem',
+    'meduse': 'jellyfish-shaped dome with a scalloped bottom fringe',
+    'poulpe': 'octopus-shaped blob with four short rounded legs',
 }
 
 n = NOMS[sys.argv[1]]

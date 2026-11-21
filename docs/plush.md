@@ -16,9 +16,11 @@ import { PlushBot } from '@norbert_bodziony/bloub/plush'
 - **Six characters** (`nexo`, `vita`, `cloe`, `malu`, `yoshi`, `fred`): body, colour and
   eye pads baked into images. Their face is a real `BotExpression`, fitted on a capture
   of the reference avatars, so it is not in the expression catalogue.
-- **Eleven grey shapes**, one per customiser shape: a neutral grey body, tinted at
+- **Fourteen grey shapes**, one per customiser shape: a neutral grey body, tinted at
   runtime to any colour (`color` takes a customiser id or `#rrggbb`). The eyes carry the
-  generic pad.
+  generic pad. A new customiser shape can ship on the flat bot before its felt body exists:
+  it is then listed in `PLUSH_PENDING` (empty today), and the test requires every customiser
+  shape to be in that list or in `PLUSH_SHAPES`. When its body arrives, it moves across.
 
 How those images were made, and how to make a new one, is in
 [tools/peluche/README.md](../tools/peluche/README.md).
