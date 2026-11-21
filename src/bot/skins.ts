@@ -36,6 +36,9 @@ export type ShapeId =
   | 'carre'
   | 'losange'
   | 'pentagone'
+  | 'fantome'
+  | 'meduse'
+  | 'poulpe'
 
 export interface BotShape {
   id: ShapeId
@@ -76,6 +79,75 @@ const droplet = normalize(
   1.04
 )
 
+/**
+ * Les rayons les plus grands, angle par angle : l'union de plusieurs profils. Exacte
+ * tant que chaque morceau est vu depuis l'origine sans se cacher lui-meme, ce qui est le
+ * cas des rectangles qui la contiennent et des bosses posees sur leur bord.
+ */
+function union(...profiles: number[][]): number[] {
+  return profiles[0]!.map((_, i) => Math.max(...profiles.map((p) => p[i]!)))
+}
+
+function rectangle(x0: number, y0: number, x1: number, y1: number): number[] {
+  return profileFromPolygon(
+    [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x1, y: y1 },
+      { x: x0, y: y1 }
+    ],
+    0,
+    0
+  )
+}
+
+/**
+ * Ourlet : `n` bosses de rayon `r` reparties sur [-demi, demi] a la hauteur `y`, relevees
+ * de `releve * t^2` vers les bords (t de -1 a 1). C'est le releve qui ecarte les pattes du
+ * poulpe et arrondit la frange de la meduse.
+ */
+function hem(n: number, demi: number, y: number, r: number, releve = 0) {
+  return Array.from({ length: n }, (_, i) => {
+    const t = (i / (n - 1)) * 2 - 1
+    return { x: t * demi, y: y - releve * t * t, r }
+  })
+}
+
+/*
+ * Les trois personnages : une tete ronde, un corps droit, un ourlet de bosses. Ils pesent
+ * comme le nuage (aire ~0.78 du cercle) une fois normalises a 1.1 : a 1.04 comme les
+ * autres, le fantome, etroit, paraissait plus petit que tout le reste de la grille.
+ */
+
+/** Fantome : dome, flancs droits, trois bosses en bas. */
+const ghost = normalize(
+  union(unionOfCirclesProfile([{ x: 0, y: -0.12, r: 0.8 }]), rectangle(-0.8, -0.12, 0.8, 0.62), unionOfCirclesProfile(hem(3, 0.54, 0.66, 0.27))),
+  1.1
+)
+
+/** Meduse : demi-ellipse large et basse, frange de six petites bosses. */
+const jellyfish = normalize(
+  union(
+    profileFromPolygon(
+      Array.from({ length: 41 }, (_, i) => {
+        const a = Math.PI + (i / 40) * Math.PI
+        return { x: Math.cos(a) * 0.9, y: Math.sin(a) * 0.86 + 0.18 }
+      }),
+      0,
+      0
+    ),
+    rectangle(-0.9, 0, 0.9, 0.3),
+    unionOfCirclesProfile(hem(6, 0.72, 0.38, 0.17, 0.08))
+  ),
+  1.1
+)
+
+/** Poulpe : tete ronde, quatre pattes qui s'ecartent vers les bords. */
+const octopus = normalize(
+  union(unionOfCirclesProfile([{ x: 0, y: -0.18, r: 0.78 }]), rectangle(-0.66, -0.1, 0.66, 0.5), unionOfCirclesProfile(hem(4, 0.78, 0.6, 0.22, 0.16))),
+  1.1
+)
+
 /** Capsule couchee : enveloppe de deux disques cote a cote. */
 const capsule = profileFromPolygon(hullOfCircles(-0.42, 0, 0.62, 0.42, 0, 0.62), 0, 0)
 
@@ -97,7 +169,10 @@ export const SHAPES: BotShape[] = [
   { id: 'carre', radii: regularPolygonProfile(4, 1.2, 0.24, 45) },
   // -90deg : une pointe vers le haut
   { id: 'losange', radii: regularPolygonProfile(4, 1.14, 0.3, -90) },
-  { id: 'pentagone', radii: regularPolygonProfile(5, 1.08, 0.28, -90) }
+  { id: 'pentagone', radii: regularPolygonProfile(5, 1.08, 0.28, -90) },
+  { id: 'fantome', radii: ghost },
+  { id: 'meduse', radii: jellyfish },
+  { id: 'poulpe', radii: octopus }
 ]
 
 // Map indexee par `string` et non par `ShapeId` : les appelants interrogent avec

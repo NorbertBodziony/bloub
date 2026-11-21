@@ -17,7 +17,7 @@ import type { EyeCfg } from '../bot/states.js'
 
 export type PlushCharacterId = 'nexo' | 'vita' | 'cloe' | 'malu' | 'yoshi' | 'fred'
 
-/** Les formes qui ont un corps gris : toutes celles du personnaliseur. */
+/** Les formes qui ont un corps gris : celles du personnaliseur, moins `PLUSH_PENDING`. */
 export type PlushShapeId = Extract<
   ShapeId,
   | 'cercle'
@@ -46,6 +46,16 @@ export const PLUSH_SHAPES: readonly PlushShapeId[] = [
   'losange',
   'pentagone'
 ]
+
+/**
+ * Les formes du personnaliseur qui n'ont pas encore de corps en feutre. Le corps gris est
+ * une generation Higgsfield recalee sur le moteur (`tools/peluche/README.md`), pas une
+ * consequence du profil : une forme peut donc exister sur le bot plat avant d'exister en
+ * peluche. La liste est nommee plutot que deduite, pour qu'une forme ajoutee sans feutre ET
+ * sans passer ici fasse echouer `plush.test.ts`. Le jour ou son corps arrive, elle passe
+ * de cette liste a `PLUSH_SHAPES`.
+ */
+export const PLUSH_PENDING: readonly Exclude<ShapeId, PlushShapeId>[] = ['fantome', 'meduse', 'poulpe']
 
 /**
  * Les etats d'une peluche : ceux qui GARDENT le corps. Une peluche ne devient pas un point

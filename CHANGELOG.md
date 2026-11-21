@@ -5,6 +5,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-21
+
+### Added
+
+- Three character shapes for the customiser and the `shape` prop: `fantome` (ghost), `meduse`
+  (jellyfish) and `poulpe` (octopus). Each is a round dome on straight sides with a hem of bumps.
+  They are scaled to look the same size as `nuage`. The eye correction (`eyefit`) covers them like
+  the other shapes, and every expression stays inside the body. Labels in French, English and
+  Chinese.
+
+### Changed
+
+- The plush keeps its 11 felt shapes: the three new shapes have no felt body yet. They are listed in
+  `PLUSH_PENDING` (internal, `src/plush/catalogue.ts`), and the plush test requires every customiser shape to have a felt body or be on
+  that list. `PlushBot`'s `shape` prop does not accept them yet.
+
 ## [0.6.8] — 2026-11-20
 
 ### Changed

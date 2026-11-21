@@ -18,7 +18,10 @@ import { PlushBot } from '@norbert_bodziony/bloub/plush'
   of the reference avatars, so it is not in the expression catalogue.
 - **Eleven grey shapes**, one per customiser shape: a neutral grey body, tinted at
   runtime to any colour (`color` takes a customiser id or `#rrggbb`). The eyes carry the
-  generic pad.
+  generic pad. The customiser's three newest shapes (`fantome`, `meduse`, `poulpe`) have no
+  felt body yet: they are listed in `PLUSH_PENDING`, and the test requires every customiser
+  shape to be in one list or the other. Adding one means generating its body, then moving
+  it from `PLUSH_PENDING` to `PLUSH_SHAPES`.
 
 How those images were made, and how to make a new one, is in
 [tools/peluche/README.md](../tools/peluche/README.md).

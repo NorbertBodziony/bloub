@@ -12,6 +12,7 @@ import {
   GENERIC_PAD,
   PLUSH_CHARACTERS,
   PLUSH_CHARACTER_BY_ID,
+  PLUSH_PENDING,
   PLUSH_SHAPES,
   PLUSH_STATES,
   shapeBody,
@@ -60,8 +61,10 @@ import { GRIS, parseHex, tintRamp } from './tint'
 const fichier = (nom: string) => fileURLToPath(new URL(`./assets/${nom}`, import.meta.url))
 
 describe('catalogue', () => {
-  it('a un corps gris pour chaque forme du personnaliseur', () => {
-    expect([...PLUSH_SHAPES].sort()).toEqual(SHAPES.map((s) => s.id).sort())
+  it('a un corps gris pour chaque forme du personnaliseur, sauf celles en attente', () => {
+    // les deux listes partagent exactement les formes du personnaliseur : une forme sans
+    // feutre doit etre NOMMEE en attente, pas oubliee
+    expect([...PLUSH_SHAPES, ...PLUSH_PENDING].sort()).toEqual(SHAPES.map((s) => s.id).sort())
     for (const shape of PLUSH_SHAPES) {
       expect(existsSync(fichier(shapeBody(shape))), shapeBody(shape)).toBe(true)
       expect(ASSET_URLS[shapeBody(shape)], shapeBody(shape)).toBeTruthy()
