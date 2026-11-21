@@ -30,7 +30,8 @@ for f in /tmp/peluche/gris/entrees/*.svg; do rsvg-convert "$f" -o "${f%.svg}.png
 ```
 
 Both read the engine: outline and eye matrices at the instant the eyes are most open.
-Nothing is redrawn. The frame is 1536 x 1024, body centred at (512, 512), 318 px per
+Nothing is redrawn. The shape inputs draw the engine's own path, curves included: joining its
+end points with straight lines faceted the small hem bumps, and a generation copies facets. The frame is 1536 x 1024, body centred at (512, 512), 318 px per
 unit of radius, the small ball on the right.
 
 ## Generating on Higgsfield
@@ -50,6 +51,12 @@ consistent from one generation to the next.
 - the Unlimited switch (`[role=switch]`) is `aria-checked="true"`;
 - Quality is Medium;
 - the generate button reads **UNLIMITED**, not a credit count.
+
+`fantome`, `meduse` and `poulpe` were generated with Codex's built-in image generation
+(GPT Image) instead: the same two attachments in the same order and the same prompt,
+first try each, then `recolte.sh` with a `file://` URL. Their fit stretched them by up to
+9.5 % on one axis (`anisotropie` 1.095 for `meduse`, 0.926 for `poulpe`); the fur showed no
+streaks at that, so they were kept.
 
 Nothing in this pipeline is worth spending credits on. A generation takes several
 minutes on Unlimited; when one misses (a face drawn on the body, a tint, the ball

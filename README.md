@@ -29,7 +29,7 @@ something done.
 
 ## What's in it
 
-The rail on the left switches between three views. **Customise** offers 11 body
+The rail on the left switches between three views. **Customise** offers 14 body
 shapes, 12 colours and 16 rest expressions, kept between visits. **Animations** is
 a small editor: arrange states into a timeline, set how long each is held, save the
 result. **Settings** holds the language (French, English or Chinese) and the
@@ -147,7 +147,7 @@ import { PlushBot } from '@norbert_bodziony/bloub/plush'
 ```
 
 A felt plush version of the bot, in its own entry so its code and images stay out of
-the main bundle. Six baked characters, or any of the 11 shapes in any colour. Only the
+the main bundle. Six baked characters, or any of the 14 shapes in any colour. Only the
 eyes move: `state` is one of `idle`, `wink`, `wide`, `thinking`, `notify`, `asleep`
 and `failed`, and `expression` takes any of the 16 rest faces. Every change, even inside a fade, blends
 with the engine's own timings. When the body changes (shape, character or colour), it
